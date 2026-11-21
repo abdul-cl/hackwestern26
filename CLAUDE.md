@@ -30,6 +30,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 - `geo.py` — Nominatim geocoding (cache, rate limit, circuit breaker), address clean-up, distance.
 - `scanning.py` — `POST /api/scan`, `POST /api/scan/stream`, scan prompt, geocoding attach.
 - `discovery.py` — `POST /api/discover`.
+- `llm.py` — `generate_json(prompt, schema)`: every Gemini JSON call, with retries + backup models on overload.
 - `ranking.py` — `POST /api/rank` (Gemini prompt).
 - `apply_form.py` — `POST /api/apply` (human-in-the-loop form fill).
 - `cpso.py` — `POST /api/verify-doctor`.
@@ -55,6 +56,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `MAX_STATUS_AGE_DAYS` (default 7) — availability older than this is **expired**: kept in the database but returned with `expired: true` and shown as "Needs a re-check" (last-seen status), never as current; not counted as accepting/closed, not auto-watched, ranked low.
     - `DEAD_AFTER_DAYS` (default 30) + `DEAD_MIN_FAILS` (default 3) — a clinic whose website has failed every check for that long is hidden from searches (not deleted; the refresher still retries it last, and one good check brings it back).
     - `REFRESH_INTERVAL_MIN` (default `0` = off) — background job re-checking the most out-of-date clinics every N minutes (`REFRESH_BATCH`, default 20 per run; `REFRESH_ALLOW_AGENT=0` to never use browser agents there). Status changes fire Watchdog alerts.
+    - `GEMINI_FALLBACK_MODELS` (default `gemini-3.5-flash-lite`, comma-separated) + `GEMINI_RETRIES` (default 2) — when Gemini answers 503 "high demand" / 429 / times out, the call is retried once on `GEMINI_MODEL` and then tried on each backup model (`app/llm.py`, used by ranking, page reading and discovery). Other errors (bad key, invalid JSON) are not retried.
     - `GEMINI_RPM` (default 12) — spacing for page-reading Gemini calls (free tier ~15/min). `CARESCOUT_SEED=0` skips loading `seed_clinics.json` into an empty database.
     - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network (hosts like Railway/Render need it; their start command sets it).
 - **Size limits:** `clinic_urls` ≤ 20 after dedup, `clinics` (rank) ≤ 30, `preferences` ≤ 20, `city` ≤ 100 chars, patient fields capped (name 120, email 200, phone 40, postal_code 12).

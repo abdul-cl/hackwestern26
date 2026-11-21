@@ -3,9 +3,8 @@ import json
 from urllib.parse import urlparse
 
 from fastapi import APIRouter
-from google.genai import types
 
-from . import config, common, models
+from . import config, llm, models
 
 router = APIRouter()
 BLOCKED_DOMAINS = (
@@ -39,13 +38,8 @@ def gemini_pick(city: str, candidates: list[dict], limit: int) -> list[str]:
         "Exclude other cities, hospitals, walk-in-only clinics, specialists, pharmacies and directories. "
         "Return the exact url values from the list, best first."
     )
-    client = config.gemini_client()  # keep a reference: a temporary client can be closed mid-request
-    resp = client.models.generate_content(
-        model=config.GEMINI_MODEL, contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=models.UrlPicks),
-    )
     allowed = {c["url"] for c in candidates}
-    picked = common.parse_gemini(resp, models.UrlPicks).clinic_urls
+    picked = llm.generate_json(prompt, models.UrlPicks).clinic_urls
     return clean_urls([u for u in picked if u in allowed], limit)
 
 

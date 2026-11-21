@@ -2,9 +2,8 @@
 import json
 
 from fastapi import APIRouter, HTTPException
-from google.genai import types
 
-from . import config, common, models
+from . import config, llm, models
 
 router = APIRouter()
 
@@ -53,17 +52,9 @@ def rank(req: models.RankRequest):
         "give it at most 40, say in reason when it was last confirmed and that it needs a re-check, make next_step "
         "checking the clinic's website or calling, and never present that status as current."
     )
-    client = config.gemini_client()  # raises a JSON 500 if the key is missing
+    config.require_key("GEMINI_API_KEY")  # a missing key is a JSON 500, not a 502
     try:
-        resp = client.models.generate_content(
-            model=config.GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=models.RankResponse,
-            ),
-        )
-        ranked = common.parse_gemini(resp, models.RankResponse)
+        ranked = llm.generate_json(prompt, models.RankResponse)  # retries + backup model when Gemini is overloaded
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"rank failed: {str(e)[:300]}")
     clinics = [c.model_dump() for c in ranked.ranked_clinics]
