@@ -1,4 +1,4 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
 import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel } from "../lib/clinics";
@@ -7,7 +7,14 @@ import StatusBadge from "./StatusBadge";
 import CallScript from "./CallScript";
 import VerifyDoctor from "./VerifyDoctor";
 
+/** Match score ring. It fills from empty when the score arrives, and glides when the score changes. */
 function ScoreRing({ score }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (score == null) return;
+    const id = requestAnimationFrame(() => setShown(score));
+    return () => cancelAnimationFrame(id);
+  }, [score]);
   if (score == null) return null;
   const color = score >= 70 ? "text-emerald-600" : score >= 40 ? "text-amber-500" : "text-rose-500";
   const r = 18;
@@ -17,15 +24,15 @@ function ScoreRing({ score }) {
       <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90">
         <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-100" />
         <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} className={color} />
+          strokeDasharray={c} strokeDashoffset={c * (1 - shown / 100)} className={`${color} transition-[stroke-dashoffset] duration-1000 ease-flow`} />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-slate-800">{score}</span>
+      <span key={score} className="absolute inset-0 flex animate-pop-in items-center justify-center text-sm font-semibold text-slate-800">{score}</span>
     </div>
   );
 }
 
 /** One clinic: scan + ranking data, and its actions (apply / call / verify doctor / watch). */
-const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, onApply, email, city, onWatched }, ref) {
+const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, onApply, email, city, onWatched, enterDelay = 0 }, ref) {
   const [panel, setPanel] = useState(null); // "call" | "verify" | null
   const [watchEmail, setWatchEmail] = useState("");
   const [watchState, setWatchState] = useState({ loading: false, done: false, error: null, askEmail: false });
@@ -73,7 +80,8 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
     <article
       ref={ref}
       onClick={() => onSelect(clinic.url)}
-      className={`card scroll-mt-24 p-4 transition ${selected ? "ring-2 ring-emerald-500" : "hover:border-slate-300"}`}
+      style={{ animationDelay: `${enterDelay}ms` }}
+      className={`card animate-card-in scroll-mt-24 p-4 transition-[border-color,box-shadow] duration-300 ${selected ? "ring-2 ring-emerald-500" : "hover:border-slate-300"}`}
     >
       <div className="flex items-start gap-3">
         <ScoreRing score={clinic.score} />
@@ -124,8 +132,8 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       {(checked || recheck.note || recheck.error) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {checked && <span className="flex items-center gap-1 text-slate-400"><Clock className="h-3.5 w-3.5" />{checked}</span>}
-          {recheck.note && <span className="text-pine-700">{recheck.note}</span>}
-          {recheck.error && <span className="text-rose-700">{recheck.error}</span>}
+          {recheck.note && <span className="animate-row-in text-pine-700">{recheck.note}</span>}
+          {recheck.error && <span className="animate-row-in text-rose-700">{recheck.error}</span>}
         </div>
       )}
 
@@ -151,7 +159,7 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         )}
         {status === "closed" && (
           watchState.done ? (
-            <span className="btn py-1.5 text-emerald-700"><Check className="h-4 w-4" /> Watching</span>
+            <span className="btn animate-pop-in py-1.5 text-emerald-700"><Check className="h-4 w-4" /> Watching</span>
           ) : (
             <button onClick={watch} disabled={watchState.loading} className="btn-secondary py-1.5">
               {watchState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellPlus className="h-4 w-4" />} Watch Clinic
@@ -161,7 +169,7 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       </div>
 
       {watchState.askEmail && !email && (
-        <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-2 flex animate-slide-down gap-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="email"
             className="input py-1.5"
@@ -176,8 +184,9 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       {watchState.error && <p className="mt-1 text-xs text-rose-700">{watchState.error}</p>}
 
       <div onClick={(e) => e.stopPropagation()}>
-        {panel === "call" && <CallScript clinic={clinic} />}
-        {panel === "verify" && <VerifyDoctor city={city} />}
+        {/* panels grow open from zero height (.expand in index.css) */}
+        {panel === "call" && <div className="expand"><div><CallScript clinic={clinic} /></div></div>}
+        {panel === "verify" && <div className="expand"><div><VerifyDoctor city={city} /></div></div>}
       </div>
     </article>
   );

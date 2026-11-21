@@ -51,7 +51,7 @@ export default function ClinicMap({ clinics, selectedUrl, onSelect }) {
         })}
       </MapContainer>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-2 rounded-lg bg-white/90 px-2 py-1 text-xs shadow-sm">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-2 rounded-lg bg-surface/90 px-2 py-1 text-xs shadow-sm">
         {["accepting", "waitlist", "closed", ...(clinics.some((c) => displayStatus(c) === "expired") ? ["expired"] : [])].map((k) => (
           <span key={k} className="flex items-center gap-1 text-slate-600">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_STYLE[k].pin }} />
@@ -60,7 +60,7 @@ export default function ClinicMap({ clinics, selectedUrl, onSelect }) {
         ))}
       </div>
       {missing > 0 && (
-        <div className="pointer-events-none absolute right-3 top-3 z-[500] flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
+        <div className="pointer-events-none absolute right-3 top-3 z-[500] flex items-center gap-1 rounded-lg bg-surface/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
           <MapPinOff className="h-3.5 w-3.5" /> {missing} without a map location
         </div>
       )}

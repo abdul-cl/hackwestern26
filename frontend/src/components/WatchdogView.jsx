@@ -115,8 +115,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
             No watched clinics yet. Use <b>Watch Clinic</b> on any full clinic, or add your email before launching a search to auto-watch them.
           </div>
         ) : (
-          watches.map((w) => (
-            <div key={w.id} className="flex flex-wrap items-center gap-3 p-4">
+          watches.map((w, i) => (
+            <div key={w.id} style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }} className="flex animate-row-in flex-wrap items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-slate-900">{w.clinic_name}</span>
@@ -148,7 +148,7 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Bell className="h-4 w-4" /> Recent alerts</h3>
           <ul className="mt-2 space-y-2 text-sm">
             {alerts.map((a) => (
-              <li key={a.alert_id} className="flex items-start gap-2">
+              <li key={a.alert_id} className="flex animate-row-in items-start gap-2">
                 <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                 <span className="text-slate-700">{a.message}</span>
                 {a.simulated && <span className="badge bg-slate-100 text-slate-500 ring-slate-200">demo</span>}

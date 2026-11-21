@@ -36,7 +36,7 @@ export default function CallScript({ clinic }) {
         )}
       </div>
       {clinic.call_script ? (
-        <div className="relative rounded-md bg-white p-3 ring-1 ring-slate-200">
+        <div className="relative rounded-md bg-surface p-3 ring-1 ring-slate-200">
           <button onClick={copy} className="btn-ghost absolute right-1 top-1 px-2 py-1 text-xs" aria-label="Copy script">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
