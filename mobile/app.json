@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "CareScout",
+    "slug": "carescoutca",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#EEF8F4",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CareScout uses your location to fill in your postal code, so it can show how far away each clinic is."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "CareScout adds a reminder to call a clinic when its phone lines open."
+        }
+      ]
+    ],
+    "scheme": "carescout",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "owner": "park0zs-team",
+    "extra": {
+      "eas": {
+        "projectId": "3eb04568-a990-4327-8c67-a7ae717c8ce2"
+      }
+    }
+  }
+}
