@@ -47,6 +47,7 @@ def main():
             if ev["type"] in KEEP:
                 if ev["type"] == "clinic_scanned":
                     ev["clinic"]["distance_km"] = None  # per-visitor, recomputed on replay
+                ev.pop("live_url", None)  # a browser agent's live view only works while it runs
                 events.append({"t": t, "event": ev})
 
     scanned = [e for e in events if e["event"]["type"] == "clinic_scanned"]

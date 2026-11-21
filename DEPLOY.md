@@ -29,6 +29,9 @@ Deploy the API first, because the website needs its URL.
    | `REFRESH_INTERVAL_MIN` | `180` (re-check out-of-date clinics every 3 hours; `0` = off) |
    | `REFRESH_ALLOW_AGENT` | `0` to keep the background job to quick page reads only (no TinyFish agent credits) |
    | `MAX_STATUS_AGE_DAYS` | optional, default `7`: older availability shows as "Needs a re-check" |
+   | `RESEND_API_KEY` | optional: real opening alerts by email ([resend.com](https://resend.com), free tier). Without a verified domain, Resend only delivers to your own Resend email |
+   | `ALERT_FROM_EMAIL` | optional: sender, e.g. `CareScout <alerts@your-domain.com>` (a domain verified in Resend) |
+   | `SITE_URL` | optional: the website's address, for the "stop watching" link in alert emails |
    | `TRUSTED_PROXY_HOPS` | optional, default `1` (right for Railway and Render): which `X-Forwarded-For` entry is the visitor's real address for the rate limit |
 
 4. **Add a volume** so the clinic database survives redeploys: right-click the service (or the canvas) → **Volume** → attach it to the service with mount path **`/data`** (matches `DATA_DIR`). On first start the database is filled from `backend/seed_clinics.json`.

@@ -217,8 +217,11 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                     queue: asyncio.Queue = asyncio.Queue()
 
                     async def worker(url: str):
-                        async def progress(message: str):
-                            await queue.put({"type": "agent_status", "url": url, "message": message})
+                        async def progress(message: str, live_url: str | None = None):
+                            event = {"type": "agent_status", "url": url, "message": message}
+                            if live_url:
+                                event["live_url"] = live_url  # the browser agent's live view (watchable while it runs)
+                            await queue.put(event)
 
                         try:
                             result = await refresh.check_url(url, city, allow_agent=True, force=refresh_mode == "all", on_progress=progress)

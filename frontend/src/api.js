@@ -112,6 +112,10 @@ export const api = {
     request("POST", "/api/rank", { body: { clinics, preferences: [], language, coverage_type: coverageType } }),
   apply: (waitlistUrl, patientInfo) =>
     request("POST", "/api/apply", { body: { waitlist_url: waitlistUrl, patient_info: patientInfo } }),
+  // Same, streamed: {type:"live", live_url} / {type:"step", message} / {type:"result", result} (last)
+  applyStream: (waitlistUrl, patientInfo, onEvent, signal) =>
+    streamPost("/api/apply/stream", { waitlist_url: waitlistUrl, patient_info: patientInfo }, onEvent, signal),
+  feedback: (body) => request("POST", "/api/feedback", { body }),
   verifyDoctor: (doctorName, city) => request("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),
   addWatch: (clinic, userEmail) =>
     request("POST", "/api/watch", {

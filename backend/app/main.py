@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 import time
 from collections import deque
 
-from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh
+from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh, feedback
 
 print("[startup] TINYFISH_API_KEY:", "set" if os.getenv("TINYFISH_API_KEY") else "MISSING")
 print("[startup] GEMINI_API_KEY:", "set" if os.getenv("GEMINI_API_KEY") else "MISSING")
@@ -64,9 +64,9 @@ def check_api_key(request: Request, x_api_key: str | None = Header(default=None)
 # ---------- Public demo mode (PUBLIC_DEMO=1): protect API credits on a public deployment ----------
 
 # Endpoints that always start a paid TinyFish agent: off for public visitors.
-LIVE_ONLY_PATHS = ("/api/apply", "/api/verify-doctor", "/api/discover", "/api/watch/check", "/api/clinics/refresh", "/api/clinics/seed")
+LIVE_ONLY_PATHS = ("/api/apply", "/api/apply/stream", "/api/verify-doctor", "/api/discover", "/api/watch/check", "/api/clinics/refresh", "/api/clinics/seed")
 # Endpoints that may call Gemini or write data: allowed, but rate-limited per visitor.
-RATE_LIMITED_PATHS = ("/api/rank", "/api/mission/stream", "/api/scan", "/api/scan/stream", "/api/watch", "/api/watch/simulate-opening")
+RATE_LIMITED_PATHS = ("/api/rank", "/api/mission/stream", "/api/scan", "/api/scan/stream", "/api/watch", "/api/watch/simulate-opening", "/api/feedback")
 RATE_WINDOW_S = 600
 _hits: dict[str, deque] = {}
 
@@ -166,3 +166,4 @@ app.include_router(cpso.router)
 app.include_router(orchestrator.router)
 app.include_router(watch_api.router)
 app.include_router(clinics_api.router)
+app.include_router(feedback.router)

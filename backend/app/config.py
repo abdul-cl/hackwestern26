@@ -48,6 +48,11 @@ def is_admin(request) -> bool:
 # The shared demo watchlist. On the public demo, watchlists only work for this address, so visitors can try the
 # Watchdog flow without storing their own email, and nobody can add, delete or fake alerts for real people's watches.
 DEMO_EMAIL = "demo@carescout.ca"
+# Email opening alerts (notify.py, https://resend.com). Off unless RESEND_API_KEY is set. The sender address must be
+# on a domain verified in Resend; Resend's test sender (onboarding@resend.dev) only delivers to your own Resend email.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "CareScout <onboarding@resend.dev>").strip()
+SITE_URL = os.getenv("SITE_URL", "").strip()  # the website's address, for the "stop watching" link in emails
 # How many proxies sit in front of the app and append to X-Forwarded-For (Railway/Render: 1). The client's real IP is
 # that many entries from the end; anything before it was written by the client and can't be trusted.
 TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "1")))

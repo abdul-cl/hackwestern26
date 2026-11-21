@@ -26,9 +26,12 @@ const initial = {
   rankError: null, // ranking failed (Gemini busy): results are shown unranked with a "Retry ranking" button
   rankRetrying: false,
   replay: null, // { recorded_at, speed } when this demo search replays a recorded real search
+  live: null, // { clinicUrl, liveUrl, steps: [], done } the browser agent being watched right now (live searches only)
 };
 
 let logId = 0;
+
+const hostOf = (url) => String(url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
 
 /** "Nov 21, 10:32 AM" for when a replayed search was recorded. */
 export function recordedLabel(iso) {
@@ -106,12 +109,24 @@ function applyEvent(state, e) {
       };
     }
     case "agent_status": {
-      // "Up to date (checked 2 h ago)" -> done; "Reading...", "Agent started...", "Following..." -> scanning; else queued
-      const status = /^up to date/i.test(e.message) ? "done" : /reading|started|following/i.test(e.message) ? "scanning" : "queued";
-      return { ...state, agents: { ...state.agents, [e.url]: status } };
+      // "Up to date (checked 2 h ago)" -> done; "Reading...", "Agent started...", "Following...", "Agent: ..." -> scanning
+      const status = /^up to date/i.test(e.message) ? "done" : /reading|started|following|^agent|live/i.test(e.message) ? "scanning" : "queued";
+      let { live, log } = state;
+      // A browser agent took over this clinic: show its live view (never for a replay: those links have expired).
+      if (e.live_url && !state.replay) {
+        live = { clinicUrl: e.url, liveUrl: e.live_url, steps: [], done: false };
+        log = [...log, entry("stage", `Browser agent is live on ${hostOf(e.url)}.`, "scan")];
+      }
+      if (/^Agent: /.test(e.message)) {
+        const step = e.message.slice(7);
+        log = [...log, entry("info", `${hostOf(e.url)}: ${step}`, "scan")];
+        if (live && live.clinicUrl === e.url) live = { ...live, steps: [...live.steps, step] };
+      }
+      return { ...state, live, log, agents: { ...state.agents, [e.url]: status } };
     }
     case "clinic_scanned": {
       const c = e.clinic;
+      if (state.live && state.live.clinicUrl === c.url) state = { ...state, live: { ...state.live, done: true } };
       const urls = state.urls.includes(c.url) ? state.urls : [...state.urls, c.url];
       const text = isFailedScan(c) ? `Couldn't check ${c.url.replace(/^https?:\/\//, "")}` : `${c.name}: ${c.status}`;
       return {

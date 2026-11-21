@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
 import { STAGES, recordedLabel } from "../hooks/useMission";
 import CountUp from "./CountUp";
+import LiveAgentView from "./LiveAgentView";
 
 function StepIcon({ status }) {
   if (status === "active") return <Loader2 className="h-4 w-4 animate-spin" />;
@@ -90,6 +91,18 @@ export default function AgentFeed({ state, onStop, onReset }) {
             <span className="text-slate-400">Most re-checks take seconds; sites that need a browser agent take 1 to 3 min (2 at a time).</span>
           ) : null}
         </div>
+      )}
+
+      {/* a browser agent took over a clinic: watch its screen while it works */}
+      {state.live && (
+        <LiveAgentView
+          key={state.live.liveUrl}
+          className="mt-3"
+          liveUrl={state.live.liveUrl}
+          title={`TinyFish browser agent on ${state.live.clinicUrl.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}`}
+          steps={state.live.steps}
+          done={state.live.done || !running}
+        />
       )}
 
       {error && (

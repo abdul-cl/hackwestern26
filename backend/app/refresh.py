@@ -237,7 +237,8 @@ def gemini_read(url: str, title: str, text: str, links: list[dict]) -> models.Pa
         "waitlist_url: the link from the list for the waitlist / new-patient / intake form, else null; "
         "address: the clinic's street address in Ontario exactly as written, else null; "
         "raw_notes: a short plain-text summary of what the page says about joining (what a patient needs such as a health card, "
-        "the phone number, hours to call or register, languages, OHIP / UHIP / uninsured, phone-only or online form); "
+        "the phone number, hours to call or register, the clinic's opening hours, any wait times or busiest times it mentions, "
+        "languages, OHIP / UHIP / uninsured, phone-only or online form); "
         "better_url: only when status is 'unknown', the one link from the list most likely to say whether they take new patients "
         "(e.g. 'New patients', 'Become a patient'), else null. Only use what the page says; never guess."
     )
@@ -311,9 +312,9 @@ async def check_url(url: str, city: str, *, allow_agent: bool = True, force: boo
 
 
 async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_progress) -> dict:
-    async def progress(message: str):
+    async def progress(message: str, live_url: str | None = None):
         if on_progress:
-            await on_progress(message)
+            await (on_progress(message, live_url=live_url) if live_url else on_progress(message))
 
     clinic_db.add_url(url, city)
     old = clinic_db.get(url) or {}
@@ -356,7 +357,14 @@ async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_
             async def started():
                 await progress("Agent started scanning...")
 
-            clinic = await scanning.scan_clinic(url, on_start=started)
+            async def agent_event(kind: str, value: str):
+                # the browser agent's live view and its steps, for people watching the search
+                if kind == "live":
+                    await progress("Browser agent is live: watch it read the clinic's website.", live_url=value)
+                elif kind == "step":
+                    await progress(f"Agent: {value}")
+
+            clinic = await scanning.scan_clinic(url, on_start=started, on_event=agent_event)
             if not common.is_failed(clinic):
                 row, old_status = clinic_db.save_check(url, city, clinic, None, "agent")
                 changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])

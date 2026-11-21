@@ -112,6 +112,10 @@ def save_alerts(alerts: list[dict], raw_emails: dict[int, str], simulated: bool 
                 (a["id"], a["clinic_name"], a["url"], raw_emails.get(a["id"], a["user_email"]), a["old_status"],
                  a["new_status"], a.get("evidence_quote", ""), a["message"], int(simulated), stamp),
             )
+    if not simulated:  # real status changes only: email the person watching (no-op unless RESEND_API_KEY is set)
+        from . import notify
+        for a in alerts:
+            notify.send_alert(a, raw_emails.get(a["id"], a["user_email"]))
 
 
 def list_alerts(user_email: str | None = None, limit: int = 20) -> list[dict]:

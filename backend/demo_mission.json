@@ -1,11 +1,11 @@
 {
   "note": "A real live CareScout search, recorded with backend/record_demo.py. Replayed (sped up) for demo searches.",
-  "recorded_at": "2026-11-21T17:00:23Z",
+  "recorded_at": "2026-11-21T22:59:51Z",
   "city": "London, ON",
-  "duration_s": 46.87,
+  "duration_s": 36.77,
   "events": [
     {
-      "t": 2.08,
+      "t": 2.15,
       "event": {
         "type": "stage",
         "stage": "discover",
@@ -13,7 +13,7 @@
       }
     },
     {
-      "t": 2.19,
+      "t": 2.33,
       "event": {
         "type": "stage",
         "stage": "discover",
@@ -21,23 +21,23 @@
       }
     },
     {
-      "t": 2.2,
+      "t": 2.34,
       "event": {
         "type": "discovered",
         "urls": [
           "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
           "https://phillbrookfamilyclinic.ca",
           "https://hamiltonmedclinic.com/",
+          "https://thompsonmedical.ca/",
+          "https://wilkinswalkinclinic.com/",
           "https://icaremedicallondon.ca/",
           "https://www.wonderlandsouthmedicalcentre.ca",
-          "https://thamesvalleyfht.ca/become-a-patient/",
-          "https://thompsonmedical.ca/",
-          "https://wilkinswalkinclinic.com/"
+          "https://thamesvalleyfht.ca/become-a-patient/"
         ]
       }
     },
     {
-      "t": 2.2,
+      "t": 2.34,
       "event": {
         "type": "stage",
         "stage": "scan",
@@ -45,7 +45,7 @@
       }
     },
     {
-      "t": 2.23,
+      "t": 2.43,
       "event": {
         "type": "agent_status",
         "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
@@ -53,7 +53,7 @@
       }
     },
     {
-      "t": 2.23,
+      "t": 2.43,
       "event": {
         "type": "agent_status",
         "url": "https://phillbrookfamilyclinic.ca",
@@ -61,7 +61,7 @@
       }
     },
     {
-      "t": 2.23,
+      "t": 2.43,
       "event": {
         "type": "agent_status",
         "url": "https://hamiltonmedclinic.com/",
@@ -69,31 +69,7 @@
       }
     },
     {
-      "t": 2.23,
-      "event": {
-        "type": "agent_status",
-        "url": "https://icaremedicallondon.ca/",
-        "message": "Reading the clinic's website..."
-      }
-    },
-    {
-      "t": 2.23,
-      "event": {
-        "type": "agent_status",
-        "url": "https://www.wonderlandsouthmedicalcentre.ca",
-        "message": "Reading the clinic's website..."
-      }
-    },
-    {
-      "t": 2.23,
-      "event": {
-        "type": "agent_status",
-        "url": "https://thamesvalleyfht.ca/become-a-patient/",
-        "message": "Reading the clinic's website..."
-      }
-    },
-    {
-      "t": 2.23,
+      "t": 2.43,
       "event": {
         "type": "agent_status",
         "url": "https://thompsonmedical.ca/",
@@ -101,7 +77,7 @@
       }
     },
     {
-      "t": 2.23,
+      "t": 2.43,
       "event": {
         "type": "agent_status",
         "url": "https://wilkinswalkinclinic.com/",
@@ -109,7 +85,31 @@
       }
     },
     {
-      "t": 2.39,
+      "t": 2.43,
+      "event": {
+        "type": "agent_status",
+        "url": "https://icaremedicallondon.ca/",
+        "message": "Reading the clinic's website..."
+      }
+    },
+    {
+      "t": 2.43,
+      "event": {
+        "type": "agent_status",
+        "url": "https://www.wonderlandsouthmedicalcentre.ca",
+        "message": "Reading the clinic's website..."
+      }
+    },
+    {
+      "t": 2.43,
+      "event": {
+        "type": "agent_status",
+        "url": "https://thamesvalleyfht.ca/become-a-patient/",
+        "message": "Reading the clinic's website..."
+      }
+    },
+    {
+      "t": 2.57,
       "event": {
         "type": "agent_status",
         "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
@@ -117,7 +117,7 @@
       }
     },
     {
-      "t": 2.39,
+      "t": 2.57,
       "event": {
         "type": "agent_status",
         "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
@@ -125,7 +125,7 @@
       }
     },
     {
-      "t": 4.15,
+      "t": 4.92,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
@@ -134,12 +134,12 @@
           "status": "closed",
           "evidence_quote": "Dr. Adeniran is no longer accepting new patients",
           "waitlist_url": null,
-          "raw_notes": "The website explicitly states that Dr. Adeniran is no longer accepting new patients and is only seeing his current rostered patients and those previously rostered to Dr. Ukpong. New patients are not currently being accepted.",
+          "raw_notes": "The clinic explicitly states that Dr. Adeniran is no longer accepting new patients. Patients are advised to contact the clinic by phone at 905-595-9126 or visit in person to determine doctor availability for previously rostered patients.",
           "address": "204 Hamilton Road, London, ON N5Z 1R1",
           "lat": 42.982077,
           "lng": -81.228401,
           "distance_km": null,
-          "last_checked": "2026-11-21T16:59:40Z",
+          "last_checked": "2026-11-21T22:59:19Z",
           "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
@@ -147,51 +147,23 @@
       }
     },
     {
-      "t": 8.82,
+      "t": 5.91,
       "event": {
-        "type": "clinic_scanned",
-        "clinic": {
-          "name": "Phillbrook Family Medical Clinic",
-          "url": "https://phillbrookfamilyclinic.ca",
-          "status": "accepting",
-          "evidence_quote": "Accepting new patients: Dr. Abiola Adebola·Book directly",
-          "waitlist_url": "https://verismo-libre.com/g/kN7tt8TE",
-          "raw_notes": "The clinic is accepting new patients under Dr. Abiola Adebola. Patients can book directly online or by calling (519) 713-0542. Hours of operation are Monday to Friday, 9:00 AM to 5:00 PM. Accepted coverage includes OHIP, WSIB, and Blue Cross IFHP.",
-          "address": "1599 Adelaide St N, Unit 105, London, ON · N5X 4E8",
-          "lat": 43.044446,
-          "lng": -81.259964,
-          "distance_km": null,
-          "last_checked": "2026-11-21T16:59:45Z",
-          "checked_via": "page",
-          "expired": false,
-          "status_age_days": 0.0
-        }
+        "type": "agent_status",
+        "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
+        "message": "Browser agent is live: watch it read the clinic's website."
       }
     },
     {
-      "t": 16.33,
+      "t": 8.07,
       "event": {
-        "type": "clinic_scanned",
-        "clinic": {
-          "name": "Wonderland South Medical Centre",
-          "url": "https://www.wonderlandsouthmedicalcentre.ca",
-          "status": "waitlist",
-          "evidence_quote": "New patients application form press the link. Please complete the form and drop it off at the clinic.",
-          "waitlist_url": "https://www.wonderlandsouthmedicalcentre.ca/s/New-patient-application-1.pdf",
-          "raw_notes": "The clinic has a new patient application form that must be completed and dropped off at the clinic in person. Patients are not to walk-in for appointments but should call (519) 472 2060.",
-          "address": "1051 WONDERLAND RD SOUTH LONDON ON N6K 3X4",
-          "lat": 42.940238,
-          "lng": -81.281922,
-          "distance_km": null,
-          "last_checked": "2026-11-21T16:59:52Z",
-          "checked_via": "page",
-          "expired": false,
-          "status_age_days": 0.0
-        }
+        "type": "agent_status",
+        "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
+        "message": "Agent: Navigate to clinic page to find patient acceptance status"
       }
     },
     {
-      "t": 25.89,
+      "t": 9.31,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
@@ -200,12 +172,12 @@
           "status": "accepting",
           "evidence_quote": "NOW ACCEPTING NEW PATIENTS",
           "waitlist_url": "https://thompsonmedical.ca/new-patients/",
-          "raw_notes": "The clinic explicitly states they are now accepting new patients and provides an 'APPLY NOW' call to action for new patients on their website.",
+          "raw_notes": "The clinic has two locations in London, Ontario. They are explicitly advertising that they are now accepting new patients and provide an 'APPLY NOW' call to action leading to their new patients page.",
           "address": "130 Thompson Road London, Ontario N5Z 2Y6; 990 Gainsborough Road, London ON, N6H 5L4",
           "lat": 42.967832,
           "lng": -81.225596,
           "distance_km": null,
-          "last_checked": "2026-11-21T17:00:00Z",
+          "last_checked": "2026-11-21T22:59:23Z",
           "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
@@ -213,21 +185,29 @@
       }
     },
     {
-      "t": 30.99,
+      "t": 13.29,
+      "event": {
+        "type": "agent_status",
+        "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
+        "message": "Agent: Extract all relevant clinic information from the page"
+      }
+    },
+    {
+      "t": 14.95,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
-          "name": "Wilkins Medical Walk In Clinic",
-          "url": "https://wilkinswalkinclinic.com/",
+          "name": "Phillbrook Family Medical Clinic",
+          "url": "https://phillbrookfamilyclinic.ca",
           "status": "accepting",
-          "evidence_quote": "Dr. Adesewa Ademola is now accepting new patients for family practice.",
-          "waitlist_url": null,
-          "raw_notes": "Dr. Adesewa Ademola is accepting new patients for family practice. Patients are encouraged to book an appointment by calling 519-963-6748.",
-          "address": "699 Wilkins Street, Unit 5, London, ON, N6C 5C8",
-          "lat": 42.951062,
-          "lng": -81.230579,
+          "evidence_quote": "Accepting new patients: Dr. Abiola Adebola·Book directly",
+          "waitlist_url": "https://verismo-libre.com/g/kN7tt8TE",
+          "raw_notes": "The clinic is accepting new patients with Dr. Abiola Adebola. Patients can book directly online via the provided link or by calling (519) 713-0542. Clinic hours are Monday to Friday, 9:00 AM – 5:00 PM. Accepted coverage includes OHIP, WSIB, and Blue Cross IFHP.",
+          "address": "1599 Adelaide St N, Unit 105, London, ON · N5X 4E8",
+          "lat": 43.044446,
+          "lng": -81.259964,
           "distance_km": null,
-          "last_checked": "2026-11-21T17:00:05Z",
+          "last_checked": "2026-11-21T22:59:29Z",
           "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
@@ -235,7 +215,7 @@
       }
     },
     {
-      "t": 36.99,
+      "t": 19.82,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
@@ -244,12 +224,12 @@
           "status": "accepting",
           "evidence_quote": "Thames Valley Family Health Team (TVFHT) is currently accepting new patients for our nurse practitioner clinics in London, Middlesex, Elgin, and Oxford.",
           "waitlist_url": "https://thamesvalleyfht.ca/become-a-patient/",
-          "raw_notes": "The clinic is accepting new patients for their nurse practitioner clinics. Interested individuals can contact the Attachment Team via a web form or by calling 519-473-0530 ext. 2197, Monday to Friday, 8 a.m. to 4 p.m. Patients need their Ontario health care number, name, and contact information.",
+          "raw_notes": "The clinic is accepting new patients for nurse practitioner clinics in London, Middlesex, Elgin, and Oxford. Potential patients can register by calling 519-473-0530 ext. 2197 or filling out the contact form on the page. Calls and emails are answered Monday to Friday, 8 a.m. to 4 p.m. Patients need to provide their name, Ontario health care number, and contact information.",
           "address": null,
           "lat": null,
           "lng": null,
           "distance_km": null,
-          "last_checked": "2026-11-21T17:00:13Z",
+          "last_checked": "2026-11-21T22:59:34Z",
           "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
@@ -257,21 +237,29 @@
       }
     },
     {
-      "t": 45.37,
+      "t": 22.65,
+      "event": {
+        "type": "agent_status",
+        "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
+        "message": "Agent: Reporting what it found"
+      }
+    },
+    {
+      "t": 24.77,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
-          "name": "iCare Medical Clinic London",
-          "url": "https://icaremedicallondon.ca/",
-          "status": "accepting",
-          "evidence_quote": "Our family doctors are now welcoming new patients of all ages.",
-          "waitlist_url": null,
-          "raw_notes": "The clinic is explicitly accepting new patients and has an online registration form on the page. They state their team will call back within 1 to 2 weeks to book a meet-and-greet.",
-          "address": "155 Clarke Road, Unit 5, London, ON",
-          "lat": 43.033826,
-          "lng": -81.190311,
+          "name": "Wonderland South Medical Centre",
+          "url": "https://www.wonderlandsouthmedicalcentre.ca",
+          "status": "waitlist",
+          "evidence_quote": "New patients application form press the link. Please complete the form and drop it off at the clinic.",
+          "waitlist_url": "https://www.wonderlandsouthmedicalcentre.ca/s/New-patient-application-1.pdf",
+          "raw_notes": "The clinic requires new patients to complete a form and drop it off at the clinic. Patients are instructed to call the clinic for appointments. The clinic is not a walk-in clinic.",
+          "address": "1051 WONDERLAND RD SOUTH, LONDON ON N6K 3X4",
+          "lat": 42.940238,
+          "lng": -81.281922,
           "distance_km": null,
-          "last_checked": "2026-11-21T17:00:16Z",
+          "last_checked": "2026-11-21T22:59:38Z",
           "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
@@ -279,7 +267,29 @@
       }
     },
     {
-      "t": 46.87,
+      "t": 29.03,
+      "event": {
+        "type": "clinic_scanned",
+        "clinic": {
+          "name": "Wilkins Medical Walk In Clinic",
+          "url": "https://wilkinswalkinclinic.com/",
+          "status": "accepting",
+          "evidence_quote": "Dr. Adesewa Ademola is now accepting new patients for family practice.",
+          "waitlist_url": null,
+          "raw_notes": "Dr. Adesewa Ademola is accepting new patients. Patients are encouraged to book an appointment by calling 519-963-6748. Clinic hours are Monday to Friday, 9:10 am – 5:00 pm.",
+          "address": "699 Wilkins Street, Unit 5, London, ON, N6C 5C8",
+          "lat": 42.951062,
+          "lng": -81.230579,
+          "distance_km": null,
+          "last_checked": "2026-11-21T22:59:43Z",
+          "checked_via": "page",
+          "expired": false,
+          "status_age_days": 0.0
+        }
+      }
+    },
+    {
+      "t": 31.0,
       "event": {
         "type": "clinic_scanned",
         "clinic": {
@@ -288,13 +298,35 @@
           "status": "accepting",
           "evidence_quote": "The London Family Health Team (LFHT) is pleased to share that some of our Physicians and Nurse Practitioners are currently accepting new patients as a result of recent funding to support access to primary care.",
           "waitlist_url": "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=ZOPkg5K7rk-hJ9fR0fWj5Z9z63s7rP5Lg3pniUP43YhUN1gxNU9JODYzWllaNEgxVTQ0TE82R0JPVy4u",
-          "raw_notes": "Clinic: London Family Health Team (LFHT). Status: Accepting new patients (some Physicians and Nurse Practitioners). Online intake form available (Patient Intake Form via Microsoft Forms). Submitting the form does not guarantee placement; connections are based on clinician availability and capacity. If a provider can accept a patient, the office will contact them directly. Alternative registration: Health Care Connect via Health811 (https://health811.ontario.ca). Phone: 519-471-8506. Hours to call or register: Monday to Friday, 8:30am-4:30pm (Allied Health Staff business hours). OHIP/UHIP/uninsured status: not explicitly stated. Languages spoken: not listed on the page. Required documents (health card, ID): not specified on the page.",
-          "address": "1261 Beaverbrook Ave – Unit 1, London, ON N6H 0G6 (Beaverbrook Site) and 770 South Wenige Drive – Unit 1, London, ON N5X 0H7 (Stoney Creek Site)",
+          "raw_notes": "Clinic locations: Beaverbrook Site (1261 Beaverbrook Ave – Unit 1, London, ON N6H 0G6), Stoney Creek Site (770 South Wenige Drive – Unit 1, London, ON N5X 0H7), Medway Location (1205 Oxford St W, London, ON N6H 1V9). Phone: 519-471-8506. Business hours for Allied Health Staff: Monday to Friday, 8:30am-4:30pm. Online Patient Intake Form is available (no phone-only option specified). Languages spoken, OHIP/UHIP/uninsured acceptance status, and required documents are not explicitly mentioned on the page. Submitting a request does not guarantee placement.",
+          "address": "1261 Beaverbrook Ave – Unit 1, London, ON N6H 0G6; 770 South Wenige Drive – Unit 1, London, ON N5X 0H7; 1205 Oxford St W, London, ON N6H 1V9",
           "lat": null,
           "lng": null,
           "distance_km": null,
-          "last_checked": "2026-11-21T17:00:15Z",
+          "last_checked": "2026-11-21T22:59:40Z",
           "checked_via": "agent",
+          "expired": false,
+          "status_age_days": 0.0
+        }
+      }
+    },
+    {
+      "t": 36.77,
+      "event": {
+        "type": "clinic_scanned",
+        "clinic": {
+          "name": "iCare Medical Clinic London",
+          "url": "https://icaremedicallondon.ca/",
+          "status": "accepting",
+          "evidence_quote": "Our family doctors are now welcoming new patients of all ages.",
+          "waitlist_url": null,
+          "raw_notes": "The clinic is accepting new patients and offers a registration form on the page. They state that the team will call the patient to book a meet-and-greet within 1 to 2 weeks of registration. The clinic also provides walk-in services without appointments.",
+          "address": "155 Clarke Road Unit 5 London, ON N5W 5C9",
+          "lat": 43.02875,
+          "lng": -81.188187,
+          "distance_km": null,
+          "last_checked": "2026-11-21T22:59:49Z",
+          "checked_via": "page",
           "expired": false,
           "status_age_days": 0.0
         }
