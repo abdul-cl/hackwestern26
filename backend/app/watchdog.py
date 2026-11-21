@@ -134,7 +134,8 @@ def make_alert(watch: dict, new_status: str, evidence_quote: str = "", show_emai
     """The alert object returned by /api/watch/check and /api/watch/simulate-opening."""
     old = watch["last_status"]
     if new_status in ("accepting", "waitlist"):
-        message = f"Good news: {watch['clinic_name']} {STATUS_LABELS[new_status]} (was {old}). Act fast, spots fill quickly."
+        news = "is now accepting new patients" if new_status == "accepting" else "now has an open waitlist"
+        message = f"Good news: {watch['clinic_name']} {news} (was {old}). Act fast, spots fill quickly."
     else:
         message = f"{watch['clinic_name']} is now {STATUS_LABELS.get(new_status, new_status)} (was {old})."
     return {

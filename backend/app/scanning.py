@@ -1,7 +1,7 @@
 """Clinic scanning with TinyFish + geocoding: POST /api/scan and POST /api/scan/stream."""
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from . import config, common, models, cache, agents, geo
@@ -112,7 +112,11 @@ def pick_urls(req: models.ScanRequest) -> tuple[list[str], bool]:
 
 
 @router.post("/api/scan")
-async def scan(req: models.ScanRequest):
+async def scan(req: models.ScanRequest, request: Request):
+    if config.public_restricted(request):
+        req.use_cache = True  # public visitors only get saved results
+        if not cache.load_cache():
+            raise HTTPException(status_code=503, detail="The demo results aren't available right now. Try again later.")
     urls, is_default = pick_urls(req)
     user_task = asyncio.create_task(user_location(req.user_postal_code))  # runs while clinics are scanned
     if req.use_cache:
@@ -137,8 +141,12 @@ async def scan(req: models.ScanRequest):
 
 
 @router.post("/api/scan/stream")
-async def scan_stream(req: models.ScanRequest):
+async def scan_stream(req: models.ScanRequest, request: Request):
     """Same body as /api/scan; streams SSE events as each clinic finishes. Always ends with a done event."""
+    if config.public_restricted(request):
+        req.use_cache = True  # public visitors only get saved results
+        if not cache.load_cache():
+            raise HTTPException(status_code=503, detail="The demo results aren't available right now. Try again later.")
     urls, is_default = pick_urls(req)
     cached = cache.load_cache() if req.use_cache else None
     if req.use_cache and not cached:

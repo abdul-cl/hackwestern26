@@ -31,7 +31,7 @@ def ok_clinic(u, status="accepting"):
 
 # --- basics / paths
 check("paths resolve from file", config.BACKEND_DIR.name == "backend" and config.ROOT_DIR == config.BACKEND_DIR.parent and (config.ROOT_DIR / "CLAUDE.md").exists())
-check("health", c.get("/health").json() == {"status": "ok"})
+check("health", c.get("/health").json()["status"] == "ok")
 
 # --- CORS
 for origin in ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]:

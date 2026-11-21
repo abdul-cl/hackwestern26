@@ -8,10 +8,15 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import time
+from collections import deque
+
 from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
+
 print("[startup] TINYFISH_API_KEY:", "set" if os.getenv("TINYFISH_API_KEY") else "MISSING")
 print("[startup] GEMINI_API_KEY:", "set" if os.getenv("GEMINI_API_KEY") else "MISSING")
 print("[startup] API auth (CARESCOUT_API_KEY):", "ON" if config.API_KEY else "off (local dev)")
+print("[startup] Public demo mode (PUBLIC_DEMO):", "ON (visitors get saved results only)" if config.PUBLIC_DEMO else "off")
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -56,6 +61,43 @@ def check_api_key(request: Request, x_api_key: str | None = Header(default=None)
         raise HTTPException(status_code=401, detail="Missing or wrong X-API-Key header.")
 
 
+# ---------- Public demo mode (PUBLIC_DEMO=1): protect API credits on a public deployment ----------
+
+# Endpoints that always start a paid TinyFish agent: off for public visitors.
+LIVE_ONLY_PATHS = ("/api/apply", "/api/verify-doctor", "/api/discover", "/api/watch/check")
+# Endpoints that may call Gemini or write data: allowed, but rate-limited per visitor.
+RATE_LIMITED_PATHS = ("/api/rank", "/api/mission/stream", "/api/scan", "/api/scan/stream", "/api/watch", "/api/watch/simulate-opening")
+RATE_WINDOW_S = 600
+_hits: dict[str, deque] = {}
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's IP (hosts like Railway/Render put it first in X-Forwarded-For)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+def public_guard(request: Request):
+    if not config.public_restricted(request) or request.method == "OPTIONS":
+        return
+    path = request.url.path
+    if path in LIVE_ONLY_PATHS:
+        raise HTTPException(
+            status_code=403,
+            detail="Live agents are turned off on the public demo to protect API credits. Run CareScout locally to use this.",
+        )
+    if request.method != "GET" and path in RATE_LIMITED_PATHS:
+        now = time.monotonic()
+        q = _hits.setdefault(client_ip(request), deque())
+        while q and now - q[0] > RATE_WINDOW_S:
+            q.popleft()
+        if len(q) >= config.PUBLIC_RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="Too many requests from this device. Try again in a few minutes.")
+        q.append(now)
+        if len(_hits) > 10_000:  # don't let the table grow forever
+            _hits.clear()
+
+
 @contextlib.asynccontextmanager
 async def lifespan(_app):
     task = asyncio.create_task(watch_api.watchdog_loop()) if config.WATCHDOG_INTERVAL_MIN > 0 else None
@@ -68,7 +110,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="CareScout API",
     default_response_class=UTF8JSONResponse,
-    dependencies=[Depends(check_api_key)],
+    dependencies=[Depends(check_api_key), Depends(public_guard)],
     docs_url=None if config.DISABLE_DOCS else "/docs",
     redoc_url=None if config.DISABLE_DOCS else "/redoc",
     openapi_url=None if config.DISABLE_DOCS else "/openapi.json",
@@ -77,19 +119,20 @@ app = FastAPI(
 app.add_middleware(CatchAllMiddleware)  # added first = inner, so CORS headers still reach error responses
 app.add_middleware(
     CORSMiddleware,
-    # Only local frontends (any port on localhost / 127.0.0.1) plus anything listed in ALLOWED_ORIGINS.
-    # A random website open in the same browser can no longer call the API.
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    # Only local frontends (any port on localhost / 127.0.0.1), anything listed in ALLOWED_ORIGINS, and anything
+    # matching ALLOWED_ORIGIN_REGEX (e.g. Vercel preview URLs). A random website can't call the API.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?" + (f"|{config.ALLOWED_ORIGIN_REGEX}" if config.ALLOWED_ORIGIN_REGEX else ""),
     allow_origins=config.EXTRA_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Admin-Key"],
 )
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(request: Request):
+    # public_demo tells the website to show saved results only (live agents unlock with the admin key)
+    return {"status": "ok", "public_demo": config.public_restricted(request)}
 
 
 app.include_router(scanning.router)

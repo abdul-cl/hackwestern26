@@ -2,7 +2,7 @@
 import asyncio
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from . import config, common, models, cache, watchdog, scanning, discovery, ranking
@@ -11,11 +11,15 @@ router = APIRouter()
 
 
 @router.post("/api/mission/stream")
-async def mission_stream(req: models.MissionRequest):
+async def mission_stream(req: models.MissionRequest, request: Request):
     """Flagship: Scout (discover) -> Browser Swarm (scan + geocode) -> Triage (Gemini rank) -> Watchdog enroll.
     Streams SSE events for every stage and ALWAYS ends with a done event, even if a stage fails."""
     if req.user_email and "@" not in req.user_email:
         raise HTTPException(status_code=422, detail="user_email must be a valid email address.")
+    if config.public_restricted(request):
+        req.use_cache = True  # public visitors only get saved results
+        if not cache.load_cache():
+            raise HTTPException(status_code=503, detail="The demo results aren't available right now. Try again later.")
     cached = cache.load_cache() if req.use_cache else None
     if req.use_cache and not cached:
         print("[mission] use_cache requested but fallback_cache.json is missing or invalid; running live")
