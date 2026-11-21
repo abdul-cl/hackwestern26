@@ -14,7 +14,7 @@ function ago(iso) {
   return h < 24 ? `checked ${h} h ago` : `checked ${Math.round(h / 24)} d ago`;
 }
 
-/** Monitored clinics (GET /api/watch), "Check All Now", alert history, and the demo "Simulate Opening". */
+/** Monitored clinics (GET /api/watch), "Check All Now", alert history, and "Preview an alert" (changes nothing). */
 export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
   const { publicDemo } = useAppState();
   const [watches, setWatches] = useState([]);
@@ -114,7 +114,7 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
           </div>
         </div>
         {!userEmail && <p className="mt-2 text-xs text-amber-700">Showing everyone's watches with emails hidden. Enter your email to see only yours.</p>}
-        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Simulate Opening to see how an alert looks.</p>}
+        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Preview an alert to see what an opening alert looks like.</p>}
         {checking && <p className="mt-2 text-xs text-slate-500">Agents are re-checking each clinic's website. This takes a few minutes.</p>}
         {message && <p className="mt-2 text-sm text-emerald-700">{message}</p>}
         {error && <p className="mt-2 text-sm text-rose-700">{error}</p>}
@@ -143,8 +143,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
                   {!userEmail && <span>{w.user_email}</span>}
                 </div>
               </div>
-              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Demo only">
-                <Sparkles className="h-3.5 w-3.5" /> Simulate
+              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert; changes nothing">
+                <Sparkles className="h-3.5 w-3.5" /> Preview alert
               </button>
               {userEmail && (
                 <button onClick={() => remove(w)} className="btn-ghost px-2 py-1 text-slate-400 hover:text-rose-600" aria-label={`Stop watching ${w.clinic_name}`}>
@@ -173,8 +173,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
       )}
 
       <div className="flex justify-end">
-        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-ghost text-xs text-slate-400 hover:text-emerald-700" title="For live demos: pretends the newest watched clinic just opened">
-          {simulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Simulate Opening (Demo)
+        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-ghost text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert for the newest watched clinic; changes nothing">
+          {simulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Preview an alert
         </button>
       </div>
     </div>

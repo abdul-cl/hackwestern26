@@ -121,9 +121,10 @@ def delete_watch(watch_id: int, user_email: str, request: Request):
 
 @router.post("/api/watch/simulate-opening")
 def simulate_opening(request: Request, req: models.SimulateRequest | None = None):
-    """DEMO ONLY: pretend a watched clinic just opened. Flips it to 'accepting' in SQLite and returns the alert
-    a real /api/watch/check would produce. Defaults to the most recently added watch.
-    On the public demo it only touches the demo account's watches (never a real person's)."""
+    """DEMO ONLY: a PREVIEW of the alert a watched clinic would trigger if it started taking patients.
+    Changes nothing: the watch keeps its real status, nothing is added to the alert history, and the message says
+    plainly that it's an example (it's about a real clinic, so it must never read as real news).
+    Defaults to the most recently added watch. On the public demo only the demo account's watches."""
     watch_id = req.watch_id if req else None
     if config.public_restricted(request):
         watch = watchdog.get_watch(watch_id, user_email=config.DEMO_EMAIL)
@@ -132,13 +133,9 @@ def simulate_opening(request: Request, req: models.SimulateRequest | None = None
     if not watch:
         detail = f"No watch with id {watch_id}." if watch_id is not None else "No watched clinics yet. Add one with POST /api/watch first."
         raise HTTPException(status_code=404, detail=detail)
-    if watch["last_status"] == "accepting":
-        # Make the stage demo repeatable: an already-open clinic "re-opens" from closed.
-        watch = {**watch, "last_status": "closed"}
-    alert = watchdog.make_alert(
-        watch, "accepting", "We are currently accepting new patients. Please call or register online.", show_email=False,
-    )
-    watchdog.record_checks([(watch["id"], "accepting")], [watch["id"]])
-    watchdog.save_alerts([alert], {watch["id"]: watch["user_email"]}, simulated=True)
-    print(f"[watch] simulated opening for watch {watch['id']} ({watch['clinic_name']})")
+    now = watchdog.STATUS_LABELS.get(watch["last_status"], watch["last_status"])
+    alert = watchdog.make_alert(watch, "accepting", "", show_email=False)
+    alert["message"] = (f"Example alert: this is what you'd get if {watch['clinic_name']} started taking new patients. "
+                        f"Right now: {now}.")
+    print(f"[watch] alert preview for watch {watch['id']} ({watch['clinic_name']}), nothing changed")
     return {"alert": {**alert, "simulated": True}}

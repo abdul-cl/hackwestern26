@@ -102,7 +102,9 @@ export default {
         "row-in": "row-in .35s ease-out both",
         "pop-in": "pop-in .25s ease-out both",
         "slide-down": "slide-down .3s ease-out both",
-        "page-in": "page-in .45s cubic-bezier(.22,1,.36,1) both",
+        // backwards, not both: once finished it must leave no transform behind (a transformed ancestor breaks
+        // position: fixed inside the page, e.g. the pinned home section and the Auto-Fill window)
+        "page-in": "page-in .45s cubic-bezier(.22,1,.36,1) backwards",
         "fade-in": "fade-in .2s ease-out both",
         "sheet-in": "sheet-in .4s cubic-bezier(.22,1,.36,1) both",
         "card-in": "card-in .5s cubic-bezier(.22,1,.36,1) both",

@@ -233,6 +233,22 @@ check("replay: old recorded results show as expired, not current", scanned[1]["e
 check("replay: the demo account auto-watches the recorded closed clinic", any(e["type"] == "watched" and e["count"] == 1 for e in ev))
 done = ev[-1]
 check("replay: summary says it's a replay", done["type"] == "done" and done["summary"]["replay_recorded_at"] == recording["recorded_at"], str(done))
+# the replay keeps the number of clinics the person asked for, closest to them first
+async def fake_postal(code):
+    return {"lat": 43.0, "lng": -81.2}  # right next to Rec Clinic
+geo.geocode_postal_code = fake_postal
+old_clinic["lat"], old_clinic["lng"] = 43.5, -80.0  # farther away
+config.DEMO_REPLAY_PATH.write_text(json.dumps(recording), encoding="utf-8")
+code, ev = mission({"use_cache": True, "max_clinics": 1, "user_postal_code": "N6A 3K7"})
+got = [e["clinic"]["url"] for e in ev if e["type"] == "clinic_scanned"]
+disc = next(e for e in ev if e["type"] == "discovered")
+check("replay: respects max_clinics, keeping the closest", got == ["https://rec.ca"] and disc["urls"] == ["https://rec.ca"]
+      and not any(e.get("url") == "https://old.ca" for e in ev if e["type"] == "agent_status"), str(got))
+check("replay: stage messages count the clinics shown, not the recording's", any(e["type"] == "stage" and e["message"] == "Checking 1 clinic website..." for e in ev)
+      and not any("8" in e.get("message", "") for e in ev if e["type"] == "stage"))
+code, ev = mission({"use_cache": True})
+check("replay: no email given -> nothing is watched", not any(e["type"] == "watched" for e in ev) and ev[-1]["summary"]["watched_count"] == 0)
+geo.geocode_postal_code = no_geo
 code, ev = mission({"use_cache": True, "city": "Toronto, ON"})
 check("replay: only for the recorded city", "replay" not in [e["type"] for e in ev])
 code, ev = mission({"use_cache": True, "refresh": "none"})

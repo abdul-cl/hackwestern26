@@ -115,11 +115,12 @@ def save_alerts(alerts: list[dict], raw_emails: dict[int, str], simulated: bool 
 
 
 def list_alerts(user_email: str | None = None, limit: int = 20) -> list[dict]:
-    """Newest first. Each item: the alert shape plus alert_id, created_at and simulated (watch id stays in 'id')."""
-    sql = "SELECT * FROM alerts {} ORDER BY id DESC LIMIT ?"
+    """Newest first. Each item: the alert shape plus alert_id, created_at and simulated (watch id stays in 'id').
+    Real alerts only: previews (simulate-opening) were never news, so older stored ones are left out."""
+    sql = "SELECT * FROM alerts WHERE simulated = 0 {} ORDER BY id DESC LIMIT ?"
     with contextlib.closing(connect()) as conn:
         if user_email:
-            rows = conn.execute(sql.format("WHERE user_email = ?"), (user_email.strip(), limit)).fetchall()
+            rows = conn.execute(sql.format("AND user_email = ?"), (user_email.strip(), limit)).fetchall()
         else:
             rows = conn.execute(sql.format(""), (limit,)).fetchall()
     out = []

@@ -72,16 +72,6 @@
   transform: none;
 }
 
-/* The pipeline line on the home page draws itself once its section is on screen. */
-.flow-line {
-  transform-origin: left center;
-  transform: scaleX(0);
-  transition: transform 1.4s cubic-bezier(0.65, 0, 0.35, 1) 0.15s;
-}
-[data-shown] .flow-line,
-.flow-line[data-shown] {
-  transform: scaleX(1);
-}
 .flow-rail {
   transform-origin: top center;
   transform: scaleY(var(--progress, 0));
@@ -185,9 +175,6 @@ details[open]::details-content {
   }
   .reveal-ready [data-reveal] {
     opacity: 1;
-    transform: none;
-  }
-  .flow-line {
     transform: none;
   }
   ::view-transition-new(root) {
