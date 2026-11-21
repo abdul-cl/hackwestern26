@@ -1,4 +1,6 @@
 """Request / response models for every endpoint. Size caps keep one bad request from burning credits."""
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 class ScanRequest(BaseModel):
@@ -26,6 +28,7 @@ class PatientInfo(BaseModel):
     email: str = Field(max_length=200)
     phone: str = Field(max_length=40)
     postal_code: str = Field(max_length=12)
+    reason: str = Field(default="", max_length=600)  # optional reason for the visit, typed only into a matching field
 
 
 class ApplyRequest(BaseModel):
@@ -44,6 +47,8 @@ class RankedClinic(BaseModel):
     phone_number: str | None = None
     call_hours: str | None = None
     call_script: str | None = None
+    hours: str | None = None  # the clinic's opening hours, from its own site (null if it doesn't say)
+    wait_note: str | None = None  # wait times / busiest times the clinic itself states (never estimated)
 
 
 class RankResponse(BaseModel):
@@ -104,3 +109,11 @@ class RefreshRequest(BaseModel):
 class SeedRequest(BaseModel):
     city: str = Field("London, ON", max_length=100)
     max_new: int = 10  # clamped 1-20
+
+
+class FeedbackRequest(BaseModel):
+    """Anonymous survey answer (feedback.py). helped: did CareScout help today; ease: 1-5; comment optional."""
+    helped: Literal["yes", "somewhat", "no"]
+    ease: int | None = Field(default=None, ge=1, le=5)
+    comment: str = Field(default="", max_length=1000)
+    page: str = Field(default="", max_length=40)

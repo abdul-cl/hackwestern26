@@ -1,5 +1,6 @@
 """Clinic scanning with TinyFish + geocoding: POST /api/scan and POST /api/scan/stream."""
 import asyncio
+import threading
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -18,19 +19,30 @@ GOAL = (
     "what a patient needs to join (e.g. health card, ID), "
     "the clinic phone number, the hours to call or register, "
     "languages spoken, whether OHIP / UHIP / uninsured patients are accepted, "
-    "and whether it is phone-only or has an online form). Only include what the page actually states; never guess."
+    "whether it is phone-only or has an online form, the clinic's opening hours, and any wait times or busiest "
+    "times the page mentions). Only include what the page actually states; never guess."
 )
+
+# The live-event listener for the scan running in this worker thread (see scan_clinic): lets scan_one stream the
+# agent's browser view and steps without changing its signature.
+_live = threading.local()
+
+
+def _with_live(emit, fn):
+    _live.emit = emit
+    try:
+        return fn()
+    finally:
+        _live.emit = None
 
 
 def scan_one(url: str) -> dict:
     """Blocking TinyFish call for one clinic; always returns a contract-shaped dict, never raises."""
     try:
         client = config.tinyfish_client(timeout=config.SCAN_TIMEOUT + 15)
-        run = client.agent.run(goal=GOAL, url=url)
-        if run.status != "COMPLETED" or not run.result:
-            msg = run.error.message if run.error else f"run {run.status}"
-            return common.failed_clinic(url, f"scan failed: {msg}")
-        r = run.result
+        status, r, error = agents.run_with_events(client, goal=GOAL, url=url, on_event=getattr(_live, "emit", None))
+        if status != "COMPLETED" or not r:
+            return common.failed_clinic(url, f"scan failed: {error or f'run {status}'}")
         if not isinstance(r, dict):
             return common.failed_clinic(url, "scan failed: unexpected result format")
         status = str(r.get("status") or "").strip().lower()
@@ -55,12 +67,15 @@ def scan_one(url: str) -> dict:
         return common.failed_clinic(url, f"scan error: {e}")
 
 
-async def scan_clinic(url: str, on_start=None) -> dict:
-    """Scan one clinic with TinyFish (queued behind the agent limit, with a timeout). Never raises (except cancellation)."""
+async def scan_clinic(url: str, on_start=None, on_event=None) -> dict:
+    """Scan one clinic with TinyFish (queued behind the agent limit, with a timeout). Never raises (except cancellation).
+    on_event: optional async callback(kind, value) for watching the agent live ("live" = browser view URL,
+    "step" = what it's doing)."""
     if not common.is_http_url(url):
         return common.failed_clinic(url, "scan failed: not a valid http(s) URL")
+    emit = agents.thread_safe(on_event)
     try:
-        return await agents.run_agent(lambda: scan_one(url), config.SCAN_TIMEOUT, on_start)
+        return await agents.run_agent(lambda: _with_live(emit, lambda: scan_one(url)), config.SCAN_TIMEOUT, on_start)
     except asyncio.TimeoutError:
         return common.failed_clinic(url, f"scan failed: timed out after {config.SCAN_TIMEOUT:.0f}s")
     except Exception as e:

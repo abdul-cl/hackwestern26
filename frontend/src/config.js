@@ -29,6 +29,12 @@ export const MAX_CLINICS = 25;
 export const DEMO_EMAIL = "demo@carescout.ca";
 
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
+// What each coverage value means, in plain words (the value itself is what the backend uses).
+export const COVERAGE_LABELS = {
+  OHIP: { short: "OHIP", long: "OHIP (Ontario health card)" },
+  UHIP: { short: "UHIP", long: "UHIP (international students)" },
+  Uninsured: { short: "no coverage", long: "No coverage / uninsured" },
+};
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];
 
 // Default map view (downtown London, ON) until clinics with coordinates arrive.

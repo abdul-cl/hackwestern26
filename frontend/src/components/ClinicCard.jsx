@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useState } from "react";
-import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
+import { BellPlus, Check, Clock, ExternalLink, FileSignature, Hourglass, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
 import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel, quoteLink } from "../lib/clinics";
 import { useAppState } from "../state/AppState";
@@ -115,6 +115,13 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
             <ul className="list-inside list-disc text-xs text-slate-600">
               {clinic.requirements.map((r) => <li key={r}>{r}</li>)}
             </ul>
+          )}
+          {/* opening hours and wait / busy times, only when the clinic's own site states them */}
+          {(clinic.hours || clinic.wait_note) && (
+            <div className="flex flex-col gap-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-4">
+              {clinic.hours && <span className="flex items-start gap-1.5"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span><b className="font-medium text-slate-700">Hours:</b> {clinic.hours}</span></span>}
+              {clinic.wait_note && <span className="flex items-start gap-1.5"><Hourglass className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span><b className="font-medium text-slate-700">Wait times:</b> {clinic.wait_note}</span></span>}
+            </div>
           )}
           {clinic.evidence_quote && (
             <blockquote className="flex gap-2 rounded-lg bg-slate-50 p-2 text-xs italic text-slate-600">

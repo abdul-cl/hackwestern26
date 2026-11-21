@@ -1,5 +1,5 @@
 import { Clock, Info, Loader2, Rocket, Square } from "lucide-react";
-import { COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS } from "../config";
+import { COVERAGE_LABELS, COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS } from "../config";
 
 /** The mission search bar. Controlled by the page (values / onChange) so other views can reuse the same email/postal code. */
 export default function MissionForm({ values, onChange, onLaunch, onStop, running, publicDemo = false }) {
@@ -29,9 +29,9 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
           <input id="postal" className="input" value={values.postalCode} onChange={set("postalCode")} placeholder="N6A 3K7" />
         </div>
         <div>
-          <label className="label" htmlFor="coverage">Coverage</label>
+          <label className="label" htmlFor="coverage">Health coverage</label>
           <select id="coverage" className="input" value={values.coverage} onChange={set("coverage")}>
-            {COVERAGE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+            {COVERAGE_OPTIONS.map((o) => <option key={o} value={o}>{COVERAGE_LABELS[o]?.long || o}</option>)}
           </select>
         </div>
         <div>

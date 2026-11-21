@@ -239,7 +239,7 @@ config.gemini_client = config.__dict__["gemini_client"]
 r = c.post("/api/rank", json={"clinics": [{"name": "A"}]}, headers={"Origin": "http://localhost:5173"})
 check("500 error still has CORS header", r.headers.get("access-control-allow-origin") in ("*", "http://localhost:5173"), str(r.headers))
 paths = sorted(p for p in c.get("/openapi.json").json()["paths"])
-check("routes unchanged", paths == ["/api/apply", "/api/clinics", "/api/clinics/refresh", "/api/clinics/seed", "/api/clinics/stats", "/api/discover", "/api/mission/stream", "/api/rank", "/api/scan", "/api/scan/stream", "/api/verify-doctor", "/api/watch", "/api/watch/alerts", "/api/watch/check", "/api/watch/simulate-opening", "/api/watch/{watch_id}", "/health"], str(paths))
+check("routes unchanged", paths == ['/api/apply', '/api/apply/stream', '/api/clinics', '/api/clinics/refresh', '/api/clinics/seed', '/api/clinics/stats', '/api/discover', '/api/feedback', '/api/feedback/summary', '/api/mission/stream', '/api/rank', '/api/scan', '/api/scan/stream', '/api/verify-doctor', '/api/watch', '/api/watch/alerts', '/api/watch/check', '/api/watch/simulate-opening', '/api/watch/{watch_id}', '/health'], str(paths))
 
 check("real fallback_cache.json untouched", REAL_CACHE.read_bytes() == real_before)
 print("\nFAILED:" if fails else "\nALL PASSED", fails)

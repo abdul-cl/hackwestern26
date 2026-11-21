@@ -10,6 +10,8 @@ import ClinicCard from "../components/ClinicCard";
 import ApplyModal from "../components/ApplyModal";
 import ErrorBoundary from "../components/ErrorBoundary";
 import NextSteps from "../components/NextSteps";
+import ResultFilters, { applyFilters } from "../components/ResultFilters";
+import FeedbackSurvey from "../components/FeedbackSurvey";
 import WatchPrompt from "../components/WatchPrompt";
 import { useFlip } from "../hooks/useFlip";
 import { scrollToTarget } from "../lib/motion";
@@ -50,10 +52,12 @@ export default function FindPage() {
   const [params, setParams] = useSearchParams();
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [applyFor, setApplyFor] = useState(null);
+  const [filters, setFilters] = useState({ status: "all", coverageOnly: false });
   const cardRefs = useRef({});
   const email = search.email.trim();
 
-  const clinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
+  const allClinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
+  const clinics = useMemo(() => applyFilters(allClinics, filters, search.coverage), [allClinics, filters, search.coverage]);
   // cards glide to their ranked position when ranking arrives
   useFlip(clinics.map((c) => c.url), cardRefs);
 
@@ -90,8 +94,17 @@ export default function FindPage() {
       <MissionForm values={search} onChange={setSearch} onLaunch={onLaunch} onStop={stop} running={state.running} publicDemo={publicDemo} />
       <AgentFeed state={state} onStop={stop} onReset={reset} />
       {/* full clinics: watched only if the person gave an email or asks here */}
-      {state.summary && !state.running && <WatchPrompt key={state.log[0]?.id} clinics={clinics} watched={state.watched} />}
+      {state.summary && !state.running && <WatchPrompt key={state.log[0]?.id} clinics={allClinics} watched={state.watched} />}
 
+      {allClinics.length > 0 && (
+        <ResultFilters clinics={allClinics} filters={filters} onChange={setFilters} coverage={search.coverage} ranked={!!state.ranked} />
+      )}
+      {allClinics.length > 0 && clinics.length === 0 && (
+        <div className="card p-6 text-center text-sm text-slate-500">
+          No clinics match these filters.{" "}
+          <button className="font-medium text-pine-700 hover:underline" onClick={() => setFilters({ status: "all", coverageOnly: false })}>Clear filters</button>
+        </div>
+      )}
       {clinics.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           <div className="min-w-0 lg:col-span-2">
@@ -134,6 +147,9 @@ export default function FindPage() {
       )}
 
       {state.summary && !state.running && <NextSteps />}
+
+      {/* anonymous survey, once a search has finished */}
+      {state.summary && !state.running && <FeedbackSurvey page="find" />}
 
       {applyFor && <ApplyModal clinic={applyFor} defaults={search} onClose={() => setApplyFor(null)} />}
     </div>
