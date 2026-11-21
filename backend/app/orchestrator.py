@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from . import config, common, agents, models, cache, watchdog, scanning, discovery, ranking, clinic_db, refresh
+from . import config, common, agents, geo, models, cache, watchdog, scanning, discovery, ranking, clinic_db, refresh
 
 router = APIRouter()
 
@@ -43,19 +43,41 @@ def load_replay(city: str) -> dict | None:
         return None
 
 
-async def replay_events(replay: dict, city: str, user_task, clinics: list[dict], counts: dict):
-    """Play back the Scout + Browser Swarm part of a real recorded search, sped up. Each clinic gets this visitor's
-    distance and an up-to-date expiry, and is collected for the live ranking and watchdog stages that follow."""
+async def replay_events(replay: dict, city: str, user_task, limit: int, clinics: list[dict], counts: dict):
+    """Play back the Scout + Browser Swarm part of a real recorded search, sped up, for the `limit` recorded clinics
+    closest to this visitor (same rule as a normal search). Each clinic gets this visitor's distance and an up-to-date
+    expiry, and is collected for the live ranking and watchdog stages that follow."""
+    recorded = {ev["clinic"]["url"]: ev["clinic"] for ev in ((i or {}).get("event") or {} for i in replay["events"])
+                if ev.get("type") == "clinic_scanned" and (ev.get("clinic") or {}).get("url")}
+    try:
+        user_loc = await asyncio.wait_for(asyncio.shield(user_task), timeout=10)
+    except Exception:
+        user_loc = None
+
+    def distance(c: dict) -> float:
+        if user_loc and c.get("lat") is not None and c.get("lng") is not None:
+            return geo.haversine_km(user_loc["lat"], user_loc["lng"], c["lat"], c["lng"])
+        return float("inf")
+
+    order = list(recorded)
+    keep = set(sorted(order, key=lambda u: (distance(recorded[u]), order.index(u)))[:limit])
+
+    plural = "" if len(keep) == 1 else "s"
     yield common.sse({"type": "replay", "recorded_at": replay.get("recorded_at"), "speed": config.REPLAY_SPEED})
-    last_t = 0.0
+    yield common.sse({"type": "stage", "stage": "discover", "message": f"Scout Agent looking for clinics in {city}..."})
+    yield common.sse({"type": "stage", "stage": "discover", "message": f"Found {len(keep)} clinic{plural} in the CareScout database."})
+    yield common.sse({"type": "discovered", "urls": [u for u in order if u in keep]})
+    yield common.sse({"type": "stage", "stage": "scan", "message": f"Checking {len(keep)} clinic website{plural}..."})
+    last_t = None
     for item in replay["events"]:
         ev = (item or {}).get("event") or {}
-        if ev.get("type") not in ("stage", "discovered", "agent_status", "clinic_scanned", "error"):
-            continue
+        url = ev.get("url") or (ev.get("clinic") or {}).get("url")
+        if ev.get("type") not in ("agent_status", "clinic_scanned") or url not in keep:
+            continue  # stage / discovered messages are rewritten above for this visitor's clinics
         t = float(item.get("t") or 0)
-        gap, last_t = max(0.0, t - last_t), max(last_t, t)
-        if gap:
-            await asyncio.sleep(min(gap / max(config.REPLAY_SPEED, 0.1), config.REPLAY_MAX_GAP_S))
+        if last_t is not None and t > last_t:
+            await asyncio.sleep(min((t - last_t) / max(config.REPLAY_SPEED, 0.1), config.REPLAY_MAX_GAP_S))
+        last_t = t if last_t is None else max(last_t, t)
         if ev["type"] == "clinic_scanned":
             clinic = await scanning.add_location(dict(ev["clinic"]), city, user_task)
             if not common.is_failed(clinic):
@@ -112,7 +134,7 @@ async def mission_stream(req: models.MissionRequest, request: Request):
         try:
             if replay:
                 # ---- Stages 1-2 from a recording of a real live search (demo / public demo) ----
-                async for item in replay_events(replay, city, user_task, clinics, counts):
+                async for item in replay_events(replay, city, user_task, limit, clinics, counts):
                     yield item
             else:
                 # ---- Stage 1: Scout (database first, web search only for more) ----

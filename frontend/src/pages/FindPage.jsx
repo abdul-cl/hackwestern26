@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { Bot, Loader2, MapPinned, RotateCcw, Sparkles } from "lucide-react";
 import { useAppState } from "../state/AppState";
 import { mergeClinics } from "../lib/clinics";
-import { DEMO_EMAIL } from "../config";
 import MissionForm from "../components/MissionForm";
 import AgentFeed from "../components/AgentFeed";
 import ClinicMap from "../components/ClinicMap";
@@ -11,6 +10,7 @@ import ClinicCard from "../components/ClinicCard";
 import ApplyModal from "../components/ApplyModal";
 import ErrorBoundary from "../components/ErrorBoundary";
 import NextSteps from "../components/NextSteps";
+import WatchPrompt from "../components/WatchPrompt";
 import { useFlip } from "../hooks/useFlip";
 
 function EmptyState() {
@@ -62,11 +62,8 @@ export default function FindPage() {
     if (params.get("demo") === "1" && !demoStarted.current) {
       demoStarted.current = true;
       setParams({}, { replace: true });
-      // Demo: saved results + the demo watchlist, so the search ends by watching the full clinics ("Now watching N")
-      // and the Watchdog step of the demo always has something to alert on.
-      const email = search.email.trim() || DEMO_EMAIL;
-      setSearch((s) => ({ ...s, useCache: true, email }));
-      if (!state.running) launch({ useCache: true, email });
+      setSearch((s) => ({ ...s, useCache: true }));
+      if (!state.running) launch({ useCache: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -90,6 +87,8 @@ export default function FindPage() {
 
       <MissionForm values={search} onChange={setSearch} onLaunch={onLaunch} onStop={stop} running={state.running} publicDemo={publicDemo} />
       <AgentFeed state={state} onStop={stop} onReset={reset} />
+      {/* full clinics: watched only if the person gave an email or asks here */}
+      {state.summary && !state.running && <WatchPrompt key={state.log[0]?.id} clinics={clinics} watched={state.watched} />}
 
       {clinics.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">

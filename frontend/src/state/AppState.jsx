@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { DEFAULT_SEARCH, DEMO_EMAIL, MAX_CLINICS } from "../config";
+import { DEFAULT_SEARCH, MAX_CLINICS } from "../config";
 import { useMission } from "../hooks/useMission";
 
 const AppStateContext = createContext(null);
@@ -23,9 +23,9 @@ export function AppStateProvider({ children }) {
       .health()
       .then((h) => {
         if (h.public_demo) {
-          // public demo: saved results only, and watchlists use the shared demo account (no real emails stored)
+          // public demo: saved results only (watchlists there use a shared demo account, see WatchPrompt)
           setPublicDemo(true);
-          setSearch((s) => ({ ...s, useCache: true, email: DEMO_EMAIL }));
+          setSearch((s) => ({ ...s, useCache: true }));
         }
       })
       .catch(() => {

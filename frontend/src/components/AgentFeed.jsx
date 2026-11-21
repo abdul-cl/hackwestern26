@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, BellRing, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
-import { Link } from "react-router-dom";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
 import { STAGES, recordedLabel } from "../hooks/useMission";
 
 function StepIcon({ status }) {
@@ -118,22 +117,13 @@ export default function AgentFeed({ state, onStop, onReset }) {
             ["Accepting", summary.accepting_count],
             ["Waitlist", summary.waitlist_count],
             ["Not accepting", summary.closed_count],
-            ["Now watching", summary.watched_count],
+            ["Couldn't check", summary.failed_count],
           ].map(([label, n], i) => (
             <div key={label} style={{ animationDelay: `${i * 70}ms` }} className="animate-pop-in rounded-lg bg-slate-50 p-2">
               <div className="text-lg font-semibold text-slate-900">{n ?? 0}</div>
               <div className="text-xs text-slate-500">{label}</div>
             </div>
           ))}
-        </div>
-      )}
-      {summary?.watched_count > 0 && state.watched?.[0] && (
-        <div className="mt-3 flex animate-slide-down flex-wrap items-center gap-3 rounded-xl bg-accent/60 px-4 py-3">
-          <BellRing className="h-5 w-5 shrink-0 text-pine-700" />
-          <p className="min-w-0 flex-1 text-sm text-ink">
-            Watching {summary.watched_count} full clinic{summary.watched_count === 1 ? "" : "s"}. When one starts taking patients, you get an alert.
-          </p>
-          <Link to={`/watchdog?simulate=${state.watched[0].id}`} className="btn-primary py-1.5">See what the alert looks like</Link>
         </div>
       )}
       {summary && (summary.from_database != null || summary.rechecked != null) && (
