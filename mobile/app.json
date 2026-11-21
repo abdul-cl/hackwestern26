@@ -36,6 +36,13 @@
         {
           "calendarPermission": "CareScout adds a reminder to call a clinic when its phone lines open."
         }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "CareScout uses Face ID to unlock the details you saved for filling in waitlist forms."
+        }
       ]
     ],
     "scheme": "carescout",

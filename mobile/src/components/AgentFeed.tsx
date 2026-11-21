@@ -25,9 +25,9 @@ function StageNode({ status, n }: { status?: StageStatus; n: number }) {
   );
 }
 
-type FeedProps = { state: MissionState; onStop: () => void; onReset: () => void; onUseDemo?: () => void };
+type FeedProps = { state: MissionState; onStop: () => void; onReset: () => void; onUseDemo?: () => void; onShowSaved?: () => void };
 
-export default function AgentFeed({ state, onStop, onReset, onUseDemo }: FeedProps) {
+export default function AgentFeed({ state, onStop, onReset, onUseDemo, onShowSaved }: FeedProps) {
   const [open, setOpen] = useState(true);
   const { running, stageStatus, log, agents, error, summary } = state;
 
@@ -96,6 +96,10 @@ export default function AgentFeed({ state, onStop, onReset, onUseDemo }: FeedPro
             {/* live search can't run on this server, so give a way out right here */}
             {onUseDemo && error.includes(`Live search ${SETUP_HINT}`) && (
               <Button small icon="flash" title="Show saved results instead" onPress={onUseDemo} style={{ alignSelf: "flex-start" }} />
+            )}
+            {/* no connection: the last results saved on this phone are better than nothing */}
+            {onShowSaved && /Can't reach the CareScout backend/.test(error) && (
+              <Button small icon="cloud-offline-outline" title="Show my last results" onPress={onShowSaved} style={{ alignSelf: "flex-start" }} />
             )}
           </View>
         </View>

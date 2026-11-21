@@ -30,6 +30,7 @@ export type MissionState = {
   summary: MissionSummary | null;
   error: string | null;
   stopped: boolean;
+  restoredAt: string | null; // set when these are the saved results from last time, not a live search
 };
 
 const initial: MissionState = {
@@ -45,6 +46,7 @@ const initial: MissionState = {
   summary: null,
   error: null,
   stopped: false,
+  restoredAt: null,
 };
 
 let logId = 0;
@@ -68,6 +70,7 @@ type Action =
   | { type: "stopped" }
   | { type: "finished" }
   | { type: "clinic_updated"; clinic: Clinic }
+  | { type: "restore"; saved: Pick<MissionState, "urls" | "scanned" | "ranked" | "summary"> & { savedAt: string } }
   | { type: "reset" };
 
 function reducer(state: MissionState, action: Action): MissionState {
@@ -86,6 +89,17 @@ function reducer(state: MissionState, action: Action): MissionState {
       return {
         ...state,
         scanned: { ...state.scanned, [action.clinic.url]: { ...state.scanned[action.clinic.url], ...action.clinic } },
+      };
+    case "restore":
+      // the saved results from last time. no log, so the live feed stays hidden and the
+      // Find screen shows the "saved on this phone" notice instead
+      return {
+        ...initial,
+        urls: action.saved.urls,
+        scanned: action.saved.scanned,
+        ranked: action.saved.ranked,
+        summary: action.saved.summary,
+        restoredAt: action.saved.savedAt,
       };
     case "reset":
       return initial;
@@ -192,7 +206,12 @@ export function useMission() {
   // swap in one clinic after a re-check without running the whole search again
   const updateClinic = useCallback((clinic: Clinic) => dispatch({ type: "clinic_updated", clinic }), []);
 
-  return { state, start, stop, reset, updateClinic };
+  const restore = useCallback(
+    (saved: Pick<MissionState, "urls" | "scanned" | "ranked" | "summary"> & { savedAt: string }) => dispatch({ type: "restore", saved }),
+    [],
+  );
+
+  return { state, start, stop, reset, updateClinic, restore };
 }
 
 export type Mission = ReturnType<typeof useMission>;

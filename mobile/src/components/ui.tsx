@@ -59,7 +59,8 @@ export function Button({ title, onPress, icon, variant = "primary", loading, dis
       disabled={off}
       accessibilityRole="button"
       accessibilityLabel={title}
-      accessibilityState={{ disabled: !!off, busy: !!loading }}
+      aria-disabled={!!off}
+      aria-busy={!!loading}
       style={[
         styles.btn,
         small && styles.btnSmall,
@@ -89,7 +90,8 @@ export function ChipSelect({ options, value, onChange, label }: { options: strin
             key={o}
             onPress={() => onChange(o)}
             accessibilityRole="radio"
-            accessibilityState={{ selected: on }}
+            // aria-* works on iOS, Android and web (react-native-web ignores accessibilityState)
+            aria-checked={on}
             style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && !on && { backgroundColor: colors.mist }]}
           >
             <Text style={[styles.chipText, on && { color: colors.white }]}>{o}</Text>

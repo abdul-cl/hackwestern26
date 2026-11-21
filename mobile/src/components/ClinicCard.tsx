@@ -7,7 +7,7 @@ import { canGetDirections, directionsUrl, shareText } from "@/lib/device";
 import { colors, fonts, radius } from "@/lib/theme";
 import type { Clinic, MergedClinic } from "@/lib/types";
 import CallScript from "./CallScript";
-import { ScoreRing } from "./motion";
+import { PressableScale, ScoreRing } from "./motion";
 import StatusBadge from "./StatusBadge";
 import { Button, Card, Ionicons, Pill, T } from "./ui";
 import VerifyDoctor from "./VerifyDoctor";
@@ -231,17 +231,18 @@ function ClinicCard(props: Props) {
 // small outline button for the secondary actions
 function Chip({ icon, text, onPress, on, disabled }: { icon: any; text: string; onPress: () => void; on?: boolean; disabled?: boolean }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={text}
-      accessibilityState={{ disabled: !!disabled, expanded: on }}
-      style={({ pressed }) => [styles.chip, on && styles.chipOn, (pressed || disabled) && { opacity: 0.6 }]}
+      aria-disabled={!!disabled}
+      aria-expanded={!!on}
+      style={[styles.chip, on && styles.chipOn, disabled && { opacity: 0.6 }]}
     >
       <Ionicons name={icon} size={14} color={on ? colors.white : colors.ink} />
       <T style={[styles.chipText, on && { color: colors.white }]}>{text}</T>
-    </Pressable>
+    </PressableScale>
   );
 }
 

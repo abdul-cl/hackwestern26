@@ -1,9 +1,10 @@
 // Auto-fill a clinic's waitlist form (POST /api/apply). The agent fills the fields and STOPS before
 // Submit, so the patient always reviews and submits on the clinic's own page. Shown as a bottom sheet
-import { useState } from "react";
-import { Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
+import { canSaveDetails, hasSavedDetails, phoneHasLock, saveDetails, unlockDetails, unlockLabel } from "@/lib/secureDetails";
 import type { Search } from "@/lib/config";
 import { colors, fonts, radius } from "@/lib/theme";
 import type { ApplyResult, MergedClinic, PatientInfo } from "@/lib/types";
@@ -41,6 +42,30 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // saved details (phones only): locked in the keychain, unlocked with Face ID / fingerprint / passcode
+  const [vault, setVault] = useState({ canSave: false, hasSaved: false, label: "your passcode", locked: true });
+  const [remember, setRemember] = useState(false);
+  const [vaultNote, setVaultNote] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const canSave = await canSaveDetails();
+      if (!canSave || !alive) return;
+      const [hasSaved, label, locked] = await Promise.all([hasSavedDetails(), unlockLabel(), phoneHasLock()]);
+      if (alive) setVault({ canSave, hasSaved, label, locked });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const fillSaved = async () => {
+    setVaultNote(null);
+    const r = await unlockDetails();
+    if (r.ok) setForm(r.details);
+    else if (r.reason) setVaultNote(r.reason);
+  };
+
   const set = (k: keyof PatientInfo) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
   const complete = form.name.trim() && form.email.includes("@") && form.phone.trim() && form.postal_code.trim();
   const openForm = () => {
@@ -53,6 +78,11 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
     setError(null);
     setResult(null);
     try {
+      if (remember) {
+        // save first so the details aren't lost if the form fill fails
+        await saveDetails(form).catch(() => {});
+        setVault((v) => ({ ...v, hasSaved: true }));
+      }
       setResult(await api.apply(clinic.waitlist_url, form));
     } catch (e: any) {
       setError(e.message);
@@ -90,6 +120,18 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
 
         {!result && !publicDemo && (
           <View style={{ gap: 12 }}>
+            {vault.hasSaved && (
+              <View style={{ gap: 6 }}>
+                <Button
+                  variant="secondary"
+                  icon={vault.label === "Face ID" || vault.label === "face unlock" ? "scan-outline" : "finger-print"}
+                  title={`Fill with my saved details`}
+                  onPress={fillSaved}
+                />
+                <T variant="small" style={{ textAlign: "center" }}>Unlocks with {vault.label}</T>
+                {vaultNote && <T variant="small" style={{ color: colors.coral, textAlign: "center" }}>{vaultNote}</T>}
+              </View>
+            )}
             <Field label="Full name" value={form.name} onChange={set("name")} max={120} auto="name" />
             <Field label="Email" value={form.email} onChange={set("email")} max={200} auto="email" keyboard="email-address" />
             <View style={{ flexDirection: "row", gap: 10 }}>
@@ -100,6 +142,25 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
                 <Field label="Postal code" value={form.postal_code} onChange={set("postal_code")} max={12} auto="postal-code" caps />
               </View>
             </View>
+            {vault.canSave && !vault.hasSaved && (
+              <View style={styles.remember}>
+                <View style={{ flex: 1 }}>
+                  <T variant="bodyStrong" style={{ fontSize: 14 }}>Save these on this phone</T>
+                  <T variant="small">
+                    {vault.locked
+                      ? `Locked with ${vault.label}. Only used to fill forms you choose.`
+                      : "Your phone has no lock set up, so anyone holding it could use them."}
+                  </T>
+                </View>
+                <Switch
+                  value={remember}
+                  onValueChange={setRemember}
+                  trackColor={{ true: colors.pine, false: colors.line }}
+                  thumbColor={colors.white}
+                  accessibilityLabel="Save these details on this phone"
+                />
+              </View>
+            )}
             {error && <T variant="small" style={{ color: colors.coral }}>{error}</T>}
             {busy && <T variant="small">The agent is filling in the form. This can take up to 2 minutes.</T>}
             <Button title="Fill in the form" icon="create-outline" onPress={submit} loading={busy} disabled={!complete} />
@@ -219,6 +280,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   banner: { flexDirection: "row", gap: 10, padding: 12, borderRadius: radius.sm },
+  remember: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.mist, padding: 12, borderRadius: radius.sm },
   table: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm },
   tr: { flexDirection: "row", gap: 8, paddingVertical: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
   shot: { width: "100%", height: 220, borderRadius: radius.sm, backgroundColor: colors.mist },

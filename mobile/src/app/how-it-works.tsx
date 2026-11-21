@@ -1,5 +1,5 @@
 // How it works tab: the four agents, reading results, privacy + safety, FAQ, and the owner key
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { router } from "expo-router";
@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import StatusBadge from "@/components/StatusBadge";
 import { Button, Card, Ionicons, T } from "@/components/ui";
 import type { DisplayStatus } from "@/lib/clinics";
+import { forgetDetails, hasSavedDetails } from "@/lib/secureDetails";
 import { colors, fonts, radius } from "@/lib/theme";
 import { useAppState } from "@/state/AppState";
 
@@ -122,7 +123,7 @@ export default function HowItWorksScreen() {
                     style={styles.q}
                     accessibilityRole="button"
                     accessibilityLabel={q}
-                    accessibilityState={{ expanded: open }}
+                    aria-expanded={open}
                   >
                     <T variant="bodyStrong" style={{ flex: 1 }}>{q}</T>
                     <Ionicons name={open ? "remove" : "add"} size={18} color={colors.muted} />
@@ -150,6 +151,7 @@ export default function HowItWorksScreen() {
           />
         </View>
 
+        <SavedDetails />
         <OwnerKey />
 
         <T variant="small" style={{ textAlign: "center" }}>
@@ -168,6 +170,37 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
         {sub && <T variant="small">{sub}</T>}
       </View>
       {children}
+    </View>
+  );
+}
+
+// lets people wipe the Auto-fill details they saved (only shows when there are some)
+function SavedDetails() {
+  const [has, setHas] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    hasSavedDetails().then(setHas);
+  }, []);
+  if (!has && !done) return null;
+  return (
+    <View style={styles.vault}>
+      <Ionicons name="lock-closed-outline" size={16} color={colors.pine} />
+      <View style={{ flex: 1 }}>
+        <T variant="bodyStrong" style={{ fontSize: 14 }}>{done ? "Saved details removed" : "Your details are saved on this phone"}</T>
+        <T variant="small">{done ? "Auto-fill will ask for them again next time." : "Locked in the phone's keychain, used only for Auto-fill."}</T>
+      </View>
+      {!done && (
+        <Button
+          small
+          variant="secondary"
+          title="Forget"
+          onPress={async () => {
+            await forgetDetails();
+            setHas(false);
+            setDone(true);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -194,7 +227,7 @@ function OwnerKey() {
         style={styles.q}
         accessibilityRole="button"
         accessibilityLabel="Owner key"
-        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
       >
         <Ionicons name="key-outline" size={15} color={colors.muted} />
         <T variant="small" style={{ flex: 1 }}>Owner key {ownerKey ? "(saved)" : ""}</T>
@@ -246,6 +279,7 @@ const styles = StyleSheet.create({
   safetyText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: "#B9D6CC", paddingLeft: 23 },
   q: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14 },
   owner: { borderTopWidth: 1, borderTopColor: colors.line },
+  vault: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.pineSoft, padding: 14, borderRadius: radius.md },
   input: {
     flex: 1,
     borderWidth: 1,
