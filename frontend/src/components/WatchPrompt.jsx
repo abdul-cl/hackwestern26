@@ -27,7 +27,7 @@ export default function WatchPrompt({ clinics, watched }) {
         <p className="min-w-0 flex-1 text-sm text-ink">
           Watching {watches.length} full clinic{watches.length === 1 ? "" : "s"}. When one starts taking patients, you get an alert.
         </p>
-        <Link to={`/watchdog?simulate=${watches[0].id}`} className="btn-primary py-1.5">See what the alert looks like</Link>
+        <Link to={`/watchdog?simulate=${watches[0].id}`} className="btn-primary py-1.5">Preview the alert</Link>
       </div>
     );
   }
