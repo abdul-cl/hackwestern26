@@ -15,9 +15,8 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from google.genai import types
 
-from . import config, common, models, clinic_db, scanning, watchdog
+from . import config, common, llm, models, clinic_db, scanning, watchdog
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 CareScout/1.0"
 FETCH_TIMEOUT_S = 15
@@ -215,12 +214,7 @@ def gemini_read(url: str, title: str, text: str, links: list[dict]) -> models.Pa
         "better_url: only when status is 'unknown', the one link from the list most likely to say whether they take new patients "
         "(e.g. 'New patients', 'Become a patient'), else null. Only use what the page says; never guess."
     )
-    client = config.gemini_client()  # keep a reference: a temporary client can be closed mid-request
-    resp = client.models.generate_content(
-        model=config.GEMINI_MODEL, contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=models.PageExtract),
-    )
-    return common.parse_gemini(resp, models.PageExtract)
+    return llm.generate_json(prompt, models.PageExtract)  # retries + backup model when Gemini is overloaded
 
 
 async def read_page(url: str) -> dict:

@@ -13,6 +13,10 @@ load_dotenv(ROOT_DIR / ".env")
 load_dotenv(BACKEND_DIR / ".env")  # optional; never overrides values that are already set
 CACHE_PATH = BACKEND_DIR / "fallback_cache.json"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")  # 2.5-flash is closed to new keys; 3.8-flash hangs
+# Backup models tried in order when the main one is overloaded (503) / rate-limited (429) / times out (see llm.py).
+# 3.5-flash-lite answered fast while 3.1-flash-lite was overloaded; 3.6-flash and 3.5-flash were slow or hung.
+GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "gemini-3.5-flash-lite").split(",") if m.strip()]
+GEMINI_RETRIES = max(1, int(os.getenv("GEMINI_RETRIES", "2")))  # attempts per model on a temporary error
 SCAN_TIMEOUT = float(os.getenv("SCAN_TIMEOUT_S", "180"))  # seconds per clinic scan (a timed-out agent keeps its slot anyway, so short limits only lose results)
 APPLY_TIMEOUT = float(os.getenv("APPLY_TIMEOUT_S", "120"))  # seconds for a form fill
 VERIFY_TIMEOUT = float(os.getenv("VERIFY_TIMEOUT_S", "45"))  # seconds for a CPSO registry lookup
