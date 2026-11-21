@@ -40,7 +40,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 - New endpoint? Add it to the matching module (or a new module with `router = APIRouter()` + `app.include_router(...)` in `main.py`), its models to `models.py`, settings to `config.py`, and tests to `backend/tests/`.
 
 # API Contract (Source of Truth)
-- **Errors (all endpoints):** failures are always JSON `{ "detail": "string" }`. `401` = missing/wrong `X-API-Key` (only when auth is on), `422` = invalid request body (incl. oversized lists/strings), `500` = missing/placeholder API key (`TINYFISH_API_KEY` / `GEMINI_API_KEY`) or unexpected server error (details only in the backend log), `502` = Gemini failed in `/api/rank`.
+- **Errors (all endpoints):** failures are always JSON `{ "detail": "string" }`. `401` = missing/wrong `X-API-Key` (only when auth is on), `422` = invalid request body (incl. oversized lists/strings), `500` = missing/placeholder API key (`TINYFISH_API_KEY` / `GEMINI_API_KEY`) or unexpected server error (details only in the backend log), `502` = Gemini failed in `/api/rank` (after its retries and backup model).
 - **Security settings (backend `.env`, all optional):**
     - `CARESCOUT_API_KEY` — if set, every `/api/*` request must send header `X-API-Key: <value>` (frontend: put it in a Vite/Next env var). Unset = no auth (local dev). `/health` is always open.
     - `ALLOWED_ORIGINS` — comma-separated extra frontend origins for CORS (e.g. a deployed URL). By default only `http://localhost:*` and `http://127.0.0.1:*` are allowed.
@@ -56,6 +56,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `MAX_STATUS_AGE_DAYS` (default 7) — availability older than this is **expired**: kept in the database but returned with `expired: true` and shown as "Needs a re-check" (last-seen status), never as current; not counted as accepting/closed, not auto-watched, ranked low.
     - `DEAD_AFTER_DAYS` (default 30) + `DEAD_MIN_FAILS` (default 3) — a clinic whose website has failed every check for that long is hidden from searches (not deleted; the refresher still retries it last, and one good check brings it back).
     - `REFRESH_INTERVAL_MIN` (default `0` = off) — background job re-checking the most out-of-date clinics every N minutes (`REFRESH_BATCH`, default 20 per run; `REFRESH_ALLOW_AGENT=0` to never use browser agents there). Status changes fire Watchdog alerts.
+    - `GEMINI_MODEL` (default `gemini-3.1-flash-lite`) — main model for every Gemini call (`gemini-2.5-flash` is closed to new keys; `3.6-flash` / `3.5-flash` / `3.8-flash` were slow or hung in testing).
     - `GEMINI_FALLBACK_MODELS` (default `gemini-3.5-flash-lite`, comma-separated) + `GEMINI_RETRIES` (default 2) — when Gemini answers 503 "high demand" / 429 / times out, the call is retried once on `GEMINI_MODEL` and then tried on each backup model (`app/llm.py`, used by ranking, page reading and discovery). Other errors (bad key, invalid JSON) are not retried.
     - `GEMINI_RPM` (default 12) — spacing for page-reading Gemini calls (free tier ~15/min). `CARESCOUT_SEED=0` skips loading `seed_clinics.json` into an empty database.
     - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network (hosts like Railway/Render need it; their start command sets it).
@@ -267,7 +268,8 @@ type MissionEvent =
   | { type: "watched"; count: number; clinics: Watch[] }
   | { type: "error"; stage: string; message: string }
   | { type: "done"; summary: { total_scanned: number; accepting_count: number; waitlist_count: number; closed_count: number;
-      failed_count: number; watched_count: number; ranked: boolean; top_clinic: string | null; duration_s: number } };
+      failed_count: number; watched_count: number; ranked: boolean; top_clinic: string | null; duration_s: number;
+      from_database: number; rechecked: number; expired_count: number } };
 ```
 - Suggested layout: a 4-step progress bar driven by `stage` events (Scout → Browser Swarm → Triage → Watchdog); an agent log fed by every `message`; one tile per URL from `discovered` that goes Queued → Scanning → result via `agent_status` / `clinic_scanned`; map pins appear as `clinic_scanned` arrives; the ranked list replaces the tiles on `ranked`; a "Watching N full clinics for openings" banner from `watched`; final stats from `done.summary`.
 - `error` events are non-fatal: show them in the log (e.g. if ranking fails, keep showing the unranked scan results). Only stop the spinner on `done`.
@@ -289,11 +291,11 @@ type MissionEvent =
 
 ## Timing / loading states
 - Scan: only 2 TinyFish agents run at once, so 5 clinics take ~3-6 min total (each ~40-150s on real sites, measured; + a few seconds for map lookups). For live demos prefer `use_cache: true`. Show "Queued" from the first `status` event, a spinner after "Agent started scanning...", until its `clinic_result`.
-- Apply: up to 120s once its agent starts, and it waits for a free agent if a scan is running (so disable "Auto-Fill" or show "Waiting for a free agent" during scans). Rank: ~2-10s. Discover: ~3-8s. Verify doctor: up to ~45s (instant if looked up in the last hour). Watch check: as long as a scan.
+- Apply: up to 120s once its agent starts, and it waits for a free agent if a scan is running (so disable "Auto-Fill" or show "Waiting for a free agent" during scans). Rank: ~2-10s (longer when Gemini is overloaded and the backend retries / switches to the backup model). Discover: ~3-8s. Verify doctor: up to ~45s (instant if looked up in the last hour). Watch check: as long as a scan.
 - Demo / no Wi-Fi: send `use_cache: true` to scan or stream for an instant replay of the saved London results. Distances still need network to look up the postal code.
 
 ## Errors
-- Every error is JSON `{ "detail": string }`: 401 bad/missing API key, 422 bad input (show `detail`), 500 backend problem (missing API key on the server etc.), 502 Gemini failed in rank (offer a retry). Rank failing shouldn't block showing scan results.
+- Every error is JSON `{ "detail": string }`: 401 bad/missing API key, 422 bad input (show `detail`), 500 backend problem (missing API key on the server etc.), 502 Gemini failed in rank even after the backend's retries and backup model (offer a retry). Rank failing shouldn't block showing scan results.
 
 # Rules for Claude
 - Keep code flat, simple, and easy to debug.
@@ -301,6 +303,7 @@ type MissionEvent =
 - **Human-in-the-loop guardrail:** `/api/apply` must fill form fields and STOP before clicking the final Submit button.
 - Include a `backend/fallback_cache.json` option as a guaranteed backup if venue Wi-Fi drops during judging.
 - After editing code, run the relevant health check or build command to verify zero errors. For `backend/`, run `python backend/tests/run_all.py` (all suites must pass) and add/adjust tests in `backend/tests/` for new behavior. Tests must never touch the real `backend/clinics.db` or `backend/fallback_cache.json` (point `watchdog.DB_PATH` / `config.CACHE_PATH` at a temp dir). Patch functions on the module that owns them (e.g. `scanning.scan_one`, `config.tinyfish_client`, `config.gemini_client`, `geo.geocode_address`), never on `main`.
+- Every Gemini JSON call goes through `llm.generate_json(prompt, schema)` (retries + backup models); don't call `client.models.generate_content` directly in feature modules. Tests fake `config.gemini_client` and set `llm.RETRY_DELAY_S = 0`.
 
 # Demo Day Checklist (judging)
 1. On good Wi-Fi beforehand: run a search with "Re-check every clinic" on (or `POST /api/clinics/seed` for more clinics) so the clinic database is fresh; to update the committed seed, re-run the seeding script (see `backend/seed_clinics.json` "note"). `backend/fallback_cache.json` (5 London clinics) is only the last-resort backup now.
