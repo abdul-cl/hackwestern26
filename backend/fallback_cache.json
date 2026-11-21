@@ -1,16 +1,18 @@
 {
+  "saved_at": "2026-11-21T06:55:36Z",
   "clinics": [
     {
-      "name": "London & District Academy of Medicine (LDAM) - Find a Doctor Directory",
-      "url": "https://www.ldam.ca/find-a-doctor",
-      "status": "accepting",
-      "evidence_quote": "We simply list those who are accepting new patients, when available. We do not keep a patient waiting list and we do not directly match patient with physicians.",
+      "name": "Hamilton Medical Clinic",
+      "url": "https://hamiltonmedclinic.com",
+      "status": "closed",
+      "evidence_quote": "Dr. Adeniran is no longer accepting new patients",
       "waitlist_url": null,
-      "raw_notes": "LDAM is a directory, not a clinic. It does not maintain a patient waiting list and does not directly match patients with physicians. The page lists 13 doctors/clinics: 1) Dr. Gerald Okafor (25 Baseline Rd W., London ON N6J 1V1, 226-663-4647) - accepting new patients, intake form at https://app.migranium.com/intake-form/dr-gerald-npi. 2) Dr. Zarmeen Qamar (460 Springbank Drive, London ON N6K 0A8, drqamar.oldsouth@gmail.com) - waitlist starting January 2027, join at www.oldsouthfho.ca (include full name, best callback number, email address). 3) Dr. Jeff Spence and Dr. Shizar Goosheh (309-460 Springbank Dr, London ON N6K 0A8, 519-858-0013, office@oldsouthfho.com) - accepting. 4) Dr. Rabiya Niaz (358 Oxford Street East, London ON N6A 1V7, 519-438-0002, https://colbornemedicare.ca/) - accepting. 5) Dr. Ankit Sachdeva (https://activecaremedicalcentre.com/201-clinic, 519-433-2996) - accepting. 6) TMC+on Hyde Park (990 Gainsborough Road, London ON, N6H 5L4, thompsonmedical.ca) - accepting; once accepted, email via Medeo or phone call with online appointment booking instructions. 7) Dr. Arogundade (Wonderland South Medical Centre, 1051 Wonderland Rd South, London ON N6K 3X4, 519-472-2060, https://www.wonderlandsouthmedicalcentre.ca/) - accepting. 8) Dr. Festus Anochie (200-440 Boler Road, London Ontario N6K 4L2, 519-471-2929) - accepting. 9) Viva Medical Clinic (149 Oxford Street East, 226-667-8488, https://vivamedicalclinic.ca/) - accepting. 10) Hamilton Medical Clinic (204 Hamilton Road, London, ON N5Z 1R1, 905-595-9126, https://hamiltonmedclinic.com/) - accepting. 11) Dundas Medical Clinic (1560 Dundast St, Unit 5, London ON, N5W 3C1, 548-866-0167, https://docs.google.com/forms/d/e/1FAIpQLSf1p8Hrnnowl_ep2Z_2Yq5bB_8jSnNVlwuMrA5acWGifI3vqA/viewform?pli=1) - accepting, Google Form registration. 12) Serenity Medical Centre (272 Oxford St W, London ON N6H 1S9, 548-866-0248) - new physician starting November 1, 2026. 13) Saffron Medical Centre (1-11 Base Line Road East, London Ontario N6C 5Z8, 519-204-0361, https://www.saffronhealth.ca/) - accepting. Registration methods: ask existing family physicians, register with Health Care Connect (1-800-445-1822, https://hcc3.hcc.moh.gov.on.ca/HCCWeb/faces/layoutHCCSplash.jsp), or search CPSO website. CPSO website allows searching for physicians who speak particular languages. No specific documents (health card, ID), hours to call, languages spoken (beyond CPSO language search), or OHIP/UHIP/uninsured acceptance mentioned on this page. Most clinics accept phone calls or online forms; some only list phone numbers without explicit online intake forms. LDAM contact: (519) 673-0950, Fax (519) 434-9332, admin@ldam.ca.",
-      "address": "122-747 Hyde Park Road, London, ON N6H 3S3",
-      "lat": 42.977532,
-      "lng": -81.321133,
-      "distance_km": null
+      "raw_notes": "The clinic explicitly states that Dr. Adeniran is no longer accepting new patients. They indicate they serve the community of London and provide urgent care services. For appointment or doctor availability inquiries, they instruct patients to contact the clinic team via phone (905-595-9126) or in-person visit.",
+      "address": "204 Hamilton Road, London, ON N5Z 1R1",
+      "lat": 42.982077,
+      "lng": -81.228401,
+      "distance_km": null,
+      "last_checked": "2026-11-21T10:16:57Z"
     },
     {
       "name": "Thames Valley Family Health Team (TVFHT)",
@@ -30,8 +32,8 @@
       "status": "accepting",
       "evidence_quote": "The London Family Health Team (LFHT) is pleased to share that some of our Physicians and Nurse Practitioners are currently accepting new patients as a result of recent funding to support access to primary care.",
       "waitlist_url": "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=ZOPkg5K7rk-hJ9fR0fWj5Z9z63s7rP5Lg3pniUP43YhUN1gxNU9JODYzWllaNEgxVTQ0TE82R0JPVy4u",
-      "raw_notes": "Some Physicians and Nurse Practitioners are accepting new patients via recent funding. Submitting a patient request form does not guarantee placement. Connections are based on clinician availability and capacity. Clinic phone: 519-471-8506. Hours to call: Monday to Friday 8:30am-4:30pm (Allied Health Staff ONLY). Health Connect Ontario also available at 811 (TTY: 1-866-797-0007). There is an online Patient Intake Form available. Locations: 1261 Beaverbrook Ave \u2013 Unit 1, London, ON N6H 0G6; 770 South Wenige Drive \u2013 Unit 1, London, ON N5X 0H7; 1205 Oxford St W, London, ON N6H 1V9. No information on specific documents required (health card, ID), languages spoken, or OHIP/UHIP/uninsured patient policy is provided on this page.",
-      "address": "1261 Beaverbrook Ave \u2013 Unit 1, London, ON N6H 0G6",
+      "raw_notes": "Some Physicians and Nurse Practitioners are accepting new patients via recent funding. Submitting a patient request form does not guarantee placement. Connections are based on clinician availability and capacity. Clinic phone: 519-471-8506. Hours to call: Monday to Friday 8:30am-4:30pm (Allied Health Staff ONLY). Health Connect Ontario also available at 811 (TTY: 1-866-797-0007). There is an online Patient Intake Form available. Locations: 1261 Beaverbrook Ave – Unit 1, London, ON N6H 0G6; 770 South Wenige Drive – Unit 1, London, ON N5X 0H7; 1205 Oxford St W, London, ON N6H 1V9. No information on specific documents required (health card, ID), languages spoken, or OHIP/UHIP/uninsured patient policy is provided on this page.",
+      "address": "1261 Beaverbrook Ave – Unit 1, London, ON N6H 0G6",
       "lat": 42.990662,
       "lng": -81.292029,
       "distance_km": null
@@ -42,7 +44,7 @@
       "status": "accepting",
       "evidence_quote": "We are currently accepting new patients of all ages, including seniors, families, and newcomers.",
       "waitlist_url": "https://app.avaros.ca/av/weblink/icaremedical",
-      "raw_notes": "Registration: Complete a registration process that takes under a minute, after which the clinic's team will contact the patient to schedule their first visit. Requirements (health card/ID) and insurance policies (OHIP/UHIP/uninsured) are not specified on the page. Languages spoken are not mentioned. Contact: (519) 204-7571, icaremedicallondon@gmail.com. Clinic hours: Monday 9:00 AM \u2013 5:30 PM, Tuesday 9:00 AM \u2013 7:30 PM, Wednesday 9:00 AM \u2013 5:30 PM, Thursday 9:00 AM \u2013 7:30 PM, Friday 9:00 AM \u2013 4:00 PM (closed Saturday and Sunday). Pharmacy hours: Monday to Friday 9:00 AM \u2013 6:00 PM, Saturday 9:00 AM \u2013 1:00 PM (closed Sunday).",
+      "raw_notes": "Registration: Complete a registration process that takes under a minute, after which the clinic's team will contact the patient to schedule their first visit. Requirements (health card/ID) and insurance policies (OHIP/UHIP/uninsured) are not specified on the page. Languages spoken are not mentioned. Contact: (519) 204-7571, icaremedicallondon@gmail.com. Clinic hours: Monday 9:00 AM – 5:30 PM, Tuesday 9:00 AM – 7:30 PM, Wednesday 9:00 AM – 5:30 PM, Thursday 9:00 AM – 7:30 PM, Friday 9:00 AM – 4:00 PM (closed Saturday and Sunday). Pharmacy hours: Monday to Friday 9:00 AM – 6:00 PM, Saturday 9:00 AM – 1:00 PM (closed Sunday).",
       "address": "155 Clarke Road Unit 5 London, ON N5W 5C9",
       "lat": 43.02875,
       "lng": -81.188187,

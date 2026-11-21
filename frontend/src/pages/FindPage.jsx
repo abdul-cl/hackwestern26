@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Bot, MapPinned, Sparkles } from "lucide-react";
+import { Bot, Loader2, MapPinned, RotateCcw, Sparkles } from "lucide-react";
 import { useAppState } from "../state/AppState";
 import { mergeClinics } from "../lib/clinics";
+import { DEMO_EMAIL } from "../config";
 import MissionForm from "../components/MissionForm";
 import AgentFeed from "../components/AgentFeed";
 import ClinicMap from "../components/ClinicMap";
 import ClinicCard from "../components/ClinicCard";
 import ApplyModal from "../components/ApplyModal";
 import ErrorBoundary from "../components/ErrorBoundary";
+import NextSteps from "../components/NextSteps";
 import { useFlip } from "../hooks/useFlip";
 
 function EmptyState() {
@@ -43,7 +45,7 @@ function EmptyState() {
 
 export default function FindPage() {
   const { search, setSearch, mission, launch, refreshWatchCount, publicDemo } = useAppState();
-  const { state, stop, reset } = mission;
+  const { state, stop, reset, retryRank } = mission;
   const [params, setParams] = useSearchParams();
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [applyFor, setApplyFor] = useState(null);
@@ -60,8 +62,11 @@ export default function FindPage() {
     if (params.get("demo") === "1" && !demoStarted.current) {
       demoStarted.current = true;
       setParams({}, { replace: true });
-      setSearch((s) => ({ ...s, useCache: true }));
-      if (!state.running) launch({ useCache: true });
+      // Demo: saved results + the demo watchlist, so the search ends by watching the full clinics ("Now watching N")
+      // and the Watchdog step of the demo always has something to alert on.
+      const email = search.email.trim() || DEMO_EMAIL;
+      setSearch((s) => ({ ...s, useCache: true, email }));
+      if (!state.running) launch({ useCache: true, email });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,6 +101,16 @@ export default function FindPage() {
             </div>
           </div>
           <div className="min-w-0 space-y-3 lg:col-span-3">
+            {state.rankError && !state.running && (
+              <div className="flex animate-slide-down flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <span className="min-w-0 flex-1">
+                  Ranking is unavailable right now (the AI model is busy), so these results aren't sorted for you yet. Everything else is up to date.
+                </span>
+                <button onClick={retryRank} disabled={state.rankRetrying} className="btn-secondary py-1.5">
+                  {state.rankRetrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Retry ranking
+                </button>
+              </div>
+            )}
             {clinics.map((c, i) => (
               <ErrorBoundary key={c.url} label={`The card for ${c.name || c.url}`}>
                 <ClinicCard
@@ -116,6 +131,8 @@ export default function FindPage() {
       ) : (
         !state.running && state.log.length === 0 && <EmptyState />
       )}
+
+      {state.summary && !state.running && <NextSteps />}
 
       {applyFor && <ApplyModal clinic={applyFor} defaults={search} onClose={() => setApplyFor(null)} />}
     </div>

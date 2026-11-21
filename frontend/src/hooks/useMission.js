@@ -23,9 +23,19 @@ const initial = {
   summary: null,
   error: null, // fatal error (request failed / stream broke)
   stopped: false,
+  rankError: null, // ranking failed (Gemini busy): results are shown unranked with a "Retry ranking" button
+  rankRetrying: false,
+  replay: null, // { recorded_at, speed } when this demo search replays a recorded real search
 };
 
 let logId = 0;
+
+/** "Nov 21, 10:32 AM" for when a replayed search was recorded. */
+export function recordedLabel(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "earlier";
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 const entry = (kind, text, stage) => ({ id: ++logId, time: new Date(), kind, text, stage });
 
 function markStage(stageStatus, stage) {
@@ -50,6 +60,19 @@ function reducer(state, action) {
       return { ...state, running: false, stopped: true, log: [...state.log, entry("info", "Mission stopped.")] };
     case "finished":
       return { ...state, running: false };
+    case "rank_retry":
+      return { ...state, rankRetrying: true, log: [...state.log, entry("stage", "Retrying the ranking...", "rank")] };
+    case "rank_retry_done":
+      return {
+        ...state,
+        rankRetrying: false,
+        rankError: null,
+        ranked: action.ranked,
+        stageStatus: { ...state.stageStatus, rank: "done" },
+        log: [...state.log, entry("info", `Ranked ${action.ranked.length} clinics.`, "rank")],
+      };
+    case "rank_retry_failed":
+      return { ...state, rankRetrying: false, rankError: action.message, log: [...state.log, entry("error", `Ranking failed again: ${action.message}`, "rank")] };
     case "clinic_updated":
       return { ...state, scanned: { ...state.scanned, [action.clinic.url]: { ...state.scanned[action.clinic.url], ...action.clinic } } };
     case "reset":
@@ -61,6 +84,12 @@ function reducer(state, action) {
 
 function applyEvent(state, e) {
   switch (e.type) {
+    case "replay":
+      return {
+        ...state,
+        replay: { recordedAt: e.recorded_at, speed: e.speed },
+        log: [...state.log, entry("info", `Replaying a real search recorded ${recordedLabel(e.recorded_at)}, sped up ${e.speed || 8}x.`, "discover")],
+      };
     case "stage": {
       const skipped = e.stage === "watch" && /skipped/i.test(e.message);
       const stageStatus = markStage(state.stageStatus, e.stage);
@@ -108,6 +137,7 @@ function applyEvent(state, e) {
     case "error":
       return {
         ...state,
+        rankError: e.stage === "rank" ? e.message : state.rankError,
         stageStatus: { ...state.stageStatus, [e.stage]: "error" },
         log: [...state.log, entry("error", e.message, e.stage)],
       };
@@ -134,11 +164,15 @@ function applyEvent(state, e) {
 export function useMission() {
   const [state, dispatch] = useReducer(reducer, initial);
   const controller = useRef(null);
+  const lastBody = useRef(null); // the search that's showing, for "Retry ranking"
+  const scannedRef = useRef(state.scanned);
+  scannedRef.current = state.scanned;
 
   const start = useCallback(async (body) => {
     controller.current?.abort();
     const ctrl = new AbortController();
     controller.current = ctrl;
+    lastBody.current = body;
     dispatch({ type: "start" });
     try {
       await api.missionStream(body, (event) => dispatch({ type: "event", event }), ctrl.signal);
@@ -165,8 +199,22 @@ export function useMission() {
     dispatch({ type: "reset" });
   }, []);
 
+  // Ranking failed (usually Gemini overloaded): rank the clinics already on screen again, without a new search.
+  const retryRank = useCallback(async () => {
+    const clinics = Object.values(scannedRef.current);
+    if (!clinics.length) return;
+    dispatch({ type: "rank_retry" });
+    try {
+      const body = lastBody.current || {};
+      const r = await api.rank(clinics, body.language || "English", body.coverage_type || "OHIP");
+      dispatch({ type: "rank_retry_done", ranked: r.ranked_clinics });
+    } catch (e) {
+      dispatch({ type: "rank_retry_failed", message: e.message || "ranking is unavailable" });
+    }
+  }, []);
+
   // Replace one clinic's result (e.g. after "Re-check") without re-running the search.
   const updateClinic = useCallback((clinic) => dispatch({ type: "clinic_updated", clinic }), []);
 
-  return { state, start, stop, reset, updateClinic };
+  return { state, start, stop, reset, updateClinic, retryRank };
 }

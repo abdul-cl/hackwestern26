@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useState } from "react";
 import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
-import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel } from "../lib/clinics";
+import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel, quoteLink } from "../lib/clinics";
 import { useAppState } from "../state/AppState";
 import StatusBadge from "./StatusBadge";
 import CallScript from "./CallScript";
@@ -119,10 +119,17 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
           {clinic.evidence_quote && (
             <blockquote className="flex gap-2 rounded-lg bg-slate-50 p-2 text-xs italic text-slate-600">
               <Quote className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span>{clinic.evidence_quote}</span>
+              <span className="min-w-0">
+                {clinic.evidence_quote}{" "}
+                {/* opens the clinic's own page with this sentence highlighted, so anyone can check it */}
+                <a href={quoteLink(clinic.url, clinic.evidence_quote)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                   className="whitespace-nowrap font-medium not-italic text-pine-700 underline-offset-2 hover:underline">
+                  See it on their site <ExternalLink className="inline h-3 w-3" />
+                </a>
+              </span>
             </blockquote>
           )}
-          {!clinic.ranked && <p className="text-xs text-slate-400">Ranking pending...</p>}
+          {!clinic.ranked && (mission.state.running || mission.state.rankRetrying) && <p className="text-xs text-slate-400">Ranking...</p>}
         </div>
       )}
 

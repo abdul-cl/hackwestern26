@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Bell, ExternalLink, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { useAppState } from "../state/AppState";
@@ -24,6 +25,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const userEmail = email.includes("@") ? email.trim() : undefined;
+  const [params, setParams] = useSearchParams();
+  const autoSimulated = useRef(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -72,6 +75,16 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
       setSimulating(false);
     }
   };
+
+  // Arrived from "See what the alert looks like" at the end of a search: play the opening alert for that watch.
+  useEffect(() => {
+    const id = Number(params.get("simulate"));
+    if (!id || autoSimulated.current || loading) return;
+    autoSimulated.current = true;
+    setParams({}, { replace: true });
+    if (watches.some((w) => w.id === id)) simulate(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, loading, watches]);
 
   const remove = async (w) => {
     if (!userEmail) {

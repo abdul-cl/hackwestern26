@@ -7,6 +7,7 @@ BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 os.environ.setdefault("DATA_DIR", tempfile.mkdtemp())  # never touch the real clinics.db
 os.environ.setdefault("CARESCOUT_SEED", "0")
+os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import httpx
 from google.genai import errors
 import app.main as m

@@ -8,15 +8,17 @@ A status change triggers Watchdog alerts for everyone watching that clinic.
 """
 import asyncio
 import hashlib
+import ipaddress
 import json
 import re
+import socket
 import time
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from . import config, common, llm, models, clinic_db, scanning, watchdog
+from . import config, common, agents, llm, models, clinic_db, scanning, watchdog
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 CareScout/1.0"
 FETCH_TIMEOUT_S = 15
@@ -165,11 +167,36 @@ def _per_loop(name: str, factory):
     return item[1]
 
 
+def _is_public_ip(ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip.split("%")[0]).is_global
+    except ValueError:
+        return False
+
+
+async def check_public_host(url: str) -> None:
+    """Refuse to fetch anything that isn't on the public internet (localhost, private networks, cloud metadata...).
+    Clinic URLs can come from users and web search, so the server must never be tricked into reading internal pages."""
+    parts = urlparse(url)
+    host = parts.hostname
+    if parts.scheme not in ("http", "https") or not host:
+        raise PageReadError("not a valid http(s) URL")
+    try:
+        infos = await asyncio.to_thread(socket.getaddrinfo, host, parts.port or (443 if parts.scheme == "https" else 80))
+    except OSError as e:
+        raise PageReadError(f"couldn't find the website ({host})") from e
+    if not infos or not all(_is_public_ip(info[4][0]) for info in infos):
+        raise PageReadError("that address isn't a public website")
+
+
 async def fetch_page(url: str) -> tuple[str, str]:
-    """(final url after redirects, html). Raises PageReadError."""
+    """(final url after redirects, html). Raises PageReadError. Every hop (redirects too) must be a public website."""
+    async def guard(request: httpx.Request):
+        await check_public_host(str(request.url))
+
     async with _per_loop("fetch", lambda: asyncio.Semaphore(config.FETCH_CONCURRENCY)):
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_S,
+            async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_S, event_hooks={"request": [guard]},
                                          headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}) as client:
                 resp = await client.get(url)
         except httpx.HTTPError as e:
@@ -274,7 +301,16 @@ async def check_url(url: str, city: str, *, allow_agent: bool = True, force: boo
 
     Returns {"clinic": <clinic dict>, "method": "unchanged" | "page" | "agent" | "failed", "status_changed": bool,
     "error": str | None}. On failure the clinic's last good result is returned if there is one.
+    One check per clinic at a time: a second caller (search, background job, watchdog) waits for the first,
+    and then usually finds the page unchanged instead of paying for a second Gemini read or browser agent.
     """
+    locks = _per_loop("url_locks", dict)
+    lock = locks.setdefault(clinic_db.url_key(url), asyncio.Lock())
+    async with lock:
+        return await _check_url(url, city, allow_agent=allow_agent, force=force, on_progress=on_progress)
+
+
+async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_progress) -> dict:
     async def progress(message: str):
         if on_progress:
             await on_progress(message)
@@ -351,12 +387,14 @@ async def refresh_stale(limit: int | None = None, hours: float | None = None, al
     agent_ok = config.REFRESH_ALLOW_AGENT if allow_agent is None else allow_agent
 
     async def one(row):
-        result = await check_url(row["url"], row.get("city") or "London, ON", allow_agent=agent_ok)
+        # no browser agents while a patient's search is running: they need both slots
+        result = await check_url(row["url"], row.get("city") or "London, ON", allow_agent=agent_ok and not agents.searches_running())
         if result["method"] in ("page", "agent"):
             await locate_and_store(result["clinic"], row.get("city") or "London, ON")
         return result
 
-    results = await asyncio.gather(*(one(r) for r in rows))
+    # One clinic at a time: a background batch must never fill the Gemini queue ahead of a patient's search.
+    results = [await one(r) for r in rows]
     tally = {"checked": len(rows), "unchanged": 0, "page": 0, "agent": 0, "failed": 0, "status_changes": 0}
     for r in results:
         tally[r["method"]] += 1
@@ -369,6 +407,8 @@ async def refresher_loop():
     """Background job: keep the clinic database fresh (REFRESH_INTERVAL_MIN)."""
     print(f"[refresh] background re-check every {config.REFRESH_INTERVAL_MIN:g} min, {config.REFRESH_BATCH} clinics per run")
     while True:
+        # wait first: a restart right before a demo must not start a big batch that competes with it
+        await asyncio.sleep(config.REFRESH_INTERVAL_MIN * 60)
         try:
             tally = await refresh_stale()
             print(f"[refresh] {tally}")
@@ -376,4 +416,3 @@ async def refresher_loop():
             raise
         except Exception as e:  # never let the loop die
             print(f"[refresh] run failed: {type(e).__name__}: {e}")
-        await asyncio.sleep(config.REFRESH_INTERVAL_MIN * 60)

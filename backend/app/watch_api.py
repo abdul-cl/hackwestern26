@@ -2,9 +2,9 @@
 import asyncio
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from . import config, common, models, watchdog, scanning
+from . import config, common, models, watchdog, scanning, clinic_db
 
 router = APIRouter()
 
@@ -35,16 +35,31 @@ def validate_watch(req: models.WatchRequest) -> None:
         raise HTTPException(status_code=422, detail="user_email must be a valid email address.")
 
 
+PUBLIC_WATCH_DETAIL = (f"Watchlists are only for the demo account ({config.DEMO_EMAIL}) on the public demo. "
+                       "Run CareScout locally to watch clinics with your own email.")
+
+
+def demo_only(request: Request, email: str | None) -> None:
+    """Public demo: watch changes are only allowed for the shared demo email."""
+    if config.public_restricted(request) and (email or "").strip().lower() != config.DEMO_EMAIL:
+        raise HTTPException(status_code=403, detail=PUBLIC_WATCH_DETAIL)
+
+
 @router.post("/api/watch")
-def add_watch(req: models.WatchRequest):
+def add_watch(req: models.WatchRequest, request: Request):
     """Watch a clinic. Watching the same url+email again updates that watch instead of duplicating it."""
     validate_watch(req)
+    demo_only(request, req.user_email)
+    if config.public_restricted(request) and not clinic_db.get(req.url):
+        raise HTTPException(status_code=403, detail="On the public demo you can only watch clinics from the CareScout database.")
     return watchdog.add_watch(req.clinic_name.strip(), req.url.strip(), req.last_status, req.user_email.strip())
 
 
 @router.get("/api/watch")
-def list_watches(user_email: str | None = None):
+def list_watches(request: Request, user_email: str | None = None):
     """Newest first. ?user_email=x returns only that user's watches (full email); without it emails are masked."""
+    if user_email:
+        demo_only(request, user_email)  # public demo: no looking up a real person's watches by their email
     watches = watchdog.list_watches(user_email)
     if not user_email:
         for w in watches:
@@ -87,26 +102,33 @@ async def check_watches(user_email: str | None = None):
 
 
 @router.get("/api/watch/alerts")
-def list_watch_alerts(user_email: str | None = None, limit: int = 20):
+def list_watch_alerts(request: Request, user_email: str | None = None, limit: int = 20):
     """Alert history (real checks, background checks and simulated openings), newest first."""
+    if user_email:
+        demo_only(request, user_email)
     alerts = watchdog.list_alerts(user_email, max(1, min(limit, 100)))
     return {"alerts": alerts}
 
 
 @router.delete("/api/watch/{watch_id}")
-def delete_watch(watch_id: int, user_email: str):
+def delete_watch(watch_id: int, user_email: str, request: Request):
     """Stop watching a clinic. Requires the owner's ?user_email= (so nobody can delete someone else's watch)."""
+    demo_only(request, user_email)
     if not watchdog.delete_watch(watch_id, user_email):
         raise HTTPException(status_code=404, detail=f"No watch {watch_id} for that user_email.")
     return {"deleted": True, "id": watch_id}
 
 
 @router.post("/api/watch/simulate-opening")
-def simulate_opening(req: models.SimulateRequest | None = None):
+def simulate_opening(request: Request, req: models.SimulateRequest | None = None):
     """DEMO ONLY: pretend a watched clinic just opened. Flips it to 'accepting' in SQLite and returns the alert
-    a real /api/watch/check would produce. Defaults to the most recently added watch."""
+    a real /api/watch/check would produce. Defaults to the most recently added watch.
+    On the public demo it only touches the demo account's watches (never a real person's)."""
     watch_id = req.watch_id if req else None
-    watch = watchdog.get_watch(watch_id)
+    if config.public_restricted(request):
+        watch = watchdog.get_watch(watch_id, user_email=config.DEMO_EMAIL)
+    else:
+        watch = watchdog.get_watch(watch_id)
     if not watch:
         detail = f"No watch with id {watch_id}." if watch_id is not None else "No watched clinics yet. Add one with POST /api/watch first."
         raise HTTPException(status_code=404, detail=detail)

@@ -45,11 +45,19 @@ def is_admin(request) -> bool:
     return bool(ADMIN_KEY) and bool(key) and secrets.compare_digest(key, ADMIN_KEY)
 
 
+# The shared demo watchlist. On the public demo, watchlists only work for this address, so visitors can try the
+# Watchdog flow without storing their own email, and nobody can add, delete or fake alerts for real people's watches.
+DEMO_EMAIL = "demo@carescout.ca"
+# How many proxies sit in front of the app and append to X-Forwarded-For (Railway/Render: 1). The client's real IP is
+# that many entries from the end; anything before it was written by the client and can't be trusted.
+TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "1")))
+
+
 def public_restricted(request) -> bool:
     """True when this request must stay in demo mode (public deployment and no admin key)."""
     return PUBLIC_DEMO and not is_admin(request)
 DEFAULT_CLINIC_URLS = [
-    "https://www.ldam.ca/find-a-doctor",
+    "https://hamiltonmedclinic.com",
     "https://thamesvalleyfht.ca/become-a-patient/",
     "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
     "https://icaremedicallondon.ca/",
@@ -83,6 +91,12 @@ STATUSES = ("accepting", "waitlist", "closed")
 # Where clinics.db lives. On Railway/Render point this at a persistent volume (e.g. /data) so it survives redeploys.
 DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
 SEED_PATH = BACKEND_DIR / "seed_clinics.json"  # clinics loaded into an empty database on startup
+# A recording of one real live search (backend/record_demo.py). Demo / public-demo searches replay its Scout and
+# Browser Swarm steps at REPLAY_SPEED x (no gap longer than REPLAY_MAX_GAP_S), then rank and watch live as usual.
+DEMO_REPLAY_PATH = BACKEND_DIR / "demo_mission.json"
+DEMO_REPLAY = os.getenv("DEMO_REPLAY", "1").strip().lower() not in ("0", "false", "no")
+REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "8"))
+REPLAY_MAX_GAP_S = float(os.getenv("REPLAY_MAX_GAP_S", "1.5"))
 SEED_ON_START = os.getenv("CARESCOUT_SEED", "1").strip().lower() not in ("0", "false", "no")
 FRESH_HOURS = float(os.getenv("FRESH_HOURS", "12"))  # a clinic checked within this many hours isn't re-checked in "auto" mode
 # Availability older than this is "expired": shown as "Needs a re-check" (with the last-seen status), never as current.

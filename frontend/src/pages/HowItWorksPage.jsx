@@ -103,8 +103,10 @@ export default function HowItWorksPage() {
             <p className="mt-1 text-sm text-slate-600">Agents read the same clinic websites you could. They don't log in anywhere or get around CAPTCHAs; if a site blocks them, you're asked to finish that one yourself.</p>
           </li>
           <li>
-            <div className="font-semibold text-ink">Your details are used for one thing</div>
-            <p className="mt-1 text-sm text-slate-600">Your name, email, phone and postal code are only typed into the form you ask CareScout to fill. Your email is only used for your watchlist alerts.</p>
+            <div className="font-semibold text-ink">Who sees your details</div>
+            <p className="mt-1 text-sm text-slate-600">
+              When you ask CareScout to fill a waitlist form, your name, email, phone and postal code go to TinyFish, whose browser agent types them into that clinic's form. Google's Gemini reads and ranks clinic information, never your contact details. Your postal code is looked up on OpenStreetMap to work out distances. Your email is stored only for watchlist alerts, and you can stop watching any time.
+            </p>
           </li>
           <li>
             <div className="font-semibold text-ink">It's not medical advice</div>

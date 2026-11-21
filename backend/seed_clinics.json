@@ -32,20 +32,6 @@
       "last_checked": "2026-11-21T10:17:17Z"
     },
     {
-      "url": "https://www.ldam.ca/find-a-doctor",
-      "name": "London & District Academy of Medicine",
-      "city": "London, ON",
-      "status": "accepting",
-      "evidence_quote": "As a courtesy to our members, we maintain a list of family doctors in the London area who have let us know that they may be accepting new patients (when available).",
-      "waitlist_url": null,
-      "raw_notes": "The LDAM website provides a list of several clinics and physicians in the London, Ontario area who are currently accepting new patients. Patients are advised to contact the clinics directly via the provided websites, email addresses, or phone numbers listed for each individual doctor or clinic.",
-      "address": "122-747 Hyde Park Road, London, ON N6H 3S3",
-      "lat": 42.977532,
-      "lng": -81.321133,
-      "checked_via": "page",
-      "last_checked": "2026-11-21T10:17:12Z"
-    },
-    {
       "url": "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
       "name": "London Family Health Team (LFHT)",
       "city": "London, ON",

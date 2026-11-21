@@ -77,13 +77,18 @@ def watches_for_url(url: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_watch(watch_id: int | None) -> dict | None:
-    """One watch by id, or the most recently created one when watch_id is None."""
+def get_watch(watch_id: int | None, user_email: str | None = None) -> dict | None:
+    """One watch by id, or the most recently created one when watch_id is None. With user_email: only that user's."""
+    where, args = [], []
+    if watch_id is not None:
+        where.append("id = ?")
+        args.append(watch_id)
+    if user_email is not None:
+        where.append("lower(user_email) = ?")
+        args.append(user_email.strip().lower())
+    sql = "SELECT * FROM watches" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created_at DESC, id DESC LIMIT 1"
     with contextlib.closing(connect()) as conn:
-        if watch_id is None:
-            row = conn.execute("SELECT * FROM watches ORDER BY created_at DESC, id DESC LIMIT 1").fetchone()
-        else:
-            row = conn.execute("SELECT * FROM watches WHERE id = ?", (watch_id,)).fetchone()
+        row = conn.execute(sql, args).fetchone()
     return dict(row) if row else None
 
 

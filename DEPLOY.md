@@ -29,6 +29,7 @@ Deploy the API first, because the website needs its URL.
    | `REFRESH_INTERVAL_MIN` | `180` (re-check out-of-date clinics every 3 hours; `0` = off) |
    | `REFRESH_ALLOW_AGENT` | `0` to keep the background job to quick page reads only (no TinyFish agent credits) |
    | `MAX_STATUS_AGE_DAYS` | optional, default `7`: older availability shows as "Needs a re-check" |
+   | `TRUSTED_PROXY_HOPS` | optional, default `1` (right for Railway and Render): which `X-Forwarded-For` entry is the visitor's real address for the rate limit |
 
 4. **Add a volume** so the clinic database survives redeploys: right-click the service (or the canvas) → **Volume** → attach it to the service with mount path **`/data`** (matches `DATA_DIR`). On first start the database is filled from `backend/seed_clinics.json`.
 5. **Settings** → **Networking** → **Generate Domain**. You get something like `https://carescout-api.up.railway.app`.
@@ -62,7 +63,8 @@ Visitors can't start paid agents, but you can, from your own browser:
 The key stays in your browser; it's never part of the website's code. Don't do this on a shared computer.
 
 ## Good to know
-- **Saved results:** public visitors see `backend/fallback_cache.json` (committed in the repo). Refresh it locally with a live `POST /api/scan {}` and commit before deploying.
+- **Saved results:** public visitors see the clinic database (seeded from `backend/seed_clinics.json`), and "Watch a demo search" replays `backend/demo_mission.json`, a real live search recorded with `python backend/record_demo.py` (run it locally with both keys, commit the file, redeploy). Re-record it on judging day: replayed results age like any saved result. `backend/fallback_cache.json` is only the last-resort backup.
+- **Watchlists on the public demo** only work for the shared demo account (`demo@carescout.ca`), so visitors can try the Watchdog without storing their email and nobody can touch real people's watches.
 - **Watchdog data** (`clinics.db`) starts empty on the server and may reset on redeploy unless you add a Railway volume mounted at `/app/backend` (Render: a persistent disk). Fine for a demo.
 - **Costs:** in public mode each visitor is limited to `PUBLIC_RATE_LIMIT` requests (default 30) per 10 minutes, and only ranking calls Gemini. Live agents run only with your admin key.
 - **Never** put `CARESCOUT_ADMIN_KEY`, `TINYFISH_API_KEY` or `GEMINI_API_KEY` in a `VITE_` variable: everything starting with `VITE_` ends up in the public website code.
