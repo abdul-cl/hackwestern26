@@ -50,6 +50,8 @@ function reducer(state, action) {
       return { ...state, running: false, stopped: true, log: [...state.log, entry("info", "Mission stopped.")] };
     case "finished":
       return { ...state, running: false };
+    case "clinic_updated":
+      return { ...state, scanned: { ...state.scanned, [action.clinic.url]: { ...state.scanned[action.clinic.url], ...action.clinic } } };
     case "reset":
       return initial;
     default:
@@ -75,8 +77,9 @@ function applyEvent(state, e) {
       };
     }
     case "agent_status": {
-      const scanning = /started/i.test(e.message);
-      return { ...state, agents: { ...state.agents, [e.url]: scanning ? "scanning" : state.agents[e.url] || "queued" } };
+      // "Up to date (checked 2 h ago)" -> done; "Reading...", "Agent started...", "Following..." -> scanning; else queued
+      const status = /^up to date/i.test(e.message) ? "done" : /reading|started|following/i.test(e.message) ? "scanning" : "queued";
+      return { ...state, agents: { ...state.agents, [e.url]: status } };
     }
     case "clinic_scanned": {
       const c = e.clinic;
@@ -162,5 +165,8 @@ export function useMission() {
     dispatch({ type: "reset" });
   }, []);
 
-  return { state, start, stop, reset };
+  // Replace one clinic's result (e.g. after "Re-check") without re-running the search.
+  const updateClinic = useCallback((clinic) => dispatch({ type: "clinic_updated", clinic }), []);
+
+  return { state, start, stop, reset, updateClinic };
 }

@@ -76,8 +76,31 @@ class MissionRequest(BaseModel):
     auto_watch_closed: bool = True
     use_cache: bool = False
     clinic_urls: list[str] = Field([], max_length=50)  # optional: skip discovery and scan these
-    max_clinics: int = 5  # how many clinics discovery should return (clamped 1-10)
+    max_clinics: int = 5  # how many clinics this search includes (clamped 1-25)
+    refresh: str = Field("auto", max_length=10)  # auto: re-check out-of-date clinics | all: re-check every clinic | none: saved only
 
 
 class SimulateRequest(BaseModel):
     watch_id: int | None = None
+
+
+class PageExtract(BaseModel):
+    """What Gemini reads off a clinic's web page (refresh.py)."""
+    name: str = ""
+    status: str = "unknown"  # accepting | waitlist | closed | unknown
+    evidence_quote: str = ""
+    waitlist_url: str | None = None
+    address: str | None = None
+    raw_notes: str = ""
+    better_url: str | None = None  # a link on the page that probably says whether they take new patients
+
+
+class RefreshRequest(BaseModel):
+    url: str = Field(max_length=2000)
+    city: str = Field("London, ON", max_length=100)
+    user_postal_code: str | None = Field(None, max_length=12)
+
+
+class SeedRequest(BaseModel):
+    city: str = Field("London, ON", max_length=100)
+    max_new: int = 10  # clamped 1-20

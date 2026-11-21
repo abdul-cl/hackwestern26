@@ -4,7 +4,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from . import config, common, models, cache, agents, geo
+from . import config, common, models, cache, agents, geo, clinic_db
 
 router = APIRouter()
 GOAL = (
@@ -58,6 +58,16 @@ async def scan_clinic(url: str, on_start=None) -> dict:
         return common.failed_clinic(url, f"scan failed: timed out after {config.SCAN_TIMEOUT:.0f}s")
     except Exception as e:
         return common.failed_clinic(url, f"scan error: {e}")
+
+
+def remember(clinic: dict, city: str) -> None:
+    """Save a successful live scan in the clinic database (so later searches can reuse it). Never raises."""
+    if common.is_failed(clinic):
+        return
+    try:
+        clinic_db.save_check(clinic["url"], city, clinic, None, "agent")
+    except Exception as e:
+        print(f"[clinic_db] couldn't save {clinic.get('url')}: {e}")
 
 
 LOCATE_TIMEOUT = 20.0  # max seconds spent geocoding one clinic (lookups are spaced 1s apart)
@@ -132,7 +142,9 @@ async def scan(req: models.ScanRequest, request: Request):
         raise
 
     async def scan_and_locate(url: str) -> dict:
-        return await add_location(await scan_clinic(url), req.city, user_task)
+        clinic = await add_location(await scan_clinic(url), req.city, user_task)
+        remember(clinic, req.city)
+        return clinic
 
     clinics = list(await asyncio.gather(*(scan_and_locate(u) for u in urls)))
     if is_default:  # never replace the London backup with a custom / partial scan
@@ -178,6 +190,7 @@ async def scan_stream(req: models.ScanRequest, request: Request):
             except Exception as e:  # scan_clinic shouldn't raise, but never leave the stream waiting
                 clinic = common.failed_clinic(url, f"scan error: {e}")
             clinic = await add_location(clinic, req.city, user_task)  # fail-safe, bounded by LOCATE_TIMEOUT
+            remember(clinic, req.city)
             await queue.put({"type": "clinic_result", "clinic": clinic})
 
         tasks = [asyncio.create_task(worker(u)) for u in urls]

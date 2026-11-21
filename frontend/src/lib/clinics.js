@@ -41,3 +41,12 @@ export function mergeClinics(scanned, order, ranked) {
 export function clinicDomId(url) {
   return "clinic-" + String(url).replace(/[^a-zA-Z0-9]+/g, "-");
 }
+
+/** "Checked 3 h ago · quick read" for a clinic's freshness line (null when we don't know). */
+export function checkedLabel(clinic) {
+  const via = { page: "read from the clinic's website", agent: "checked by a browser agent", saved: "saved result" }[clinic?.checked_via];
+  if (!clinic?.last_checked) return via === "saved result" ? "Saved result" : null;
+  const mins = Math.round((Date.now() - new Date(clinic.last_checked).getTime()) / 60000);
+  const when = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 48 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} days ago`;
+  return `Checked ${when}` + (via && via !== "saved result" ? `, ${via}` : "");
+}

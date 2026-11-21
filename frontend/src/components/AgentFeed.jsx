@@ -69,7 +69,9 @@ export default function AgentFeed({ state, onStop, onReset }) {
           <span className="badge bg-slate-50 text-slate-600 ring-slate-200">{agentCounts.queued || 0} queued</span>
           <span className="badge bg-sky-50 text-sky-700 ring-sky-200">{agentCounts.scanning || 0} scanning</span>
           <span className="badge bg-emerald-50 text-emerald-700 ring-emerald-200">{agentCounts.done || 0} done</span>
-          {running && <span className="text-slate-400">Real clinic sites take ~1-3 min each; 2 agents run at once.</span>}
+          {running && (agentCounts.queued || agentCounts.scanning) ? (
+            <span className="text-slate-400">Most re-checks take seconds; sites that need a browser agent take 1 to 3 min (2 at a time).</span>
+          ) : null}
         </div>
       )}
 
@@ -108,6 +110,11 @@ export default function AgentFeed({ state, onStop, onReset }) {
             </div>
           ))}
         </div>
+      )}
+      {summary && (summary.from_database != null || summary.rechecked != null) && (
+        <p className="mt-2 text-xs text-slate-500">
+          {summary.from_database ?? 0} from the CareScout database, {summary.rechecked ?? 0} checked live, in {summary.duration_s}s.
+        </p>
       )}
     </section>
   );

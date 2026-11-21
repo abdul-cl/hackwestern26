@@ -118,5 +118,10 @@ export const api = {
   checkWatches: (userEmail) => request("POST", "/api/watch/check", { query: { user_email: userEmail } }),
   deleteWatch: (id, userEmail) => request("DELETE", `/api/watch/${id}`, { query: { user_email: userEmail } }),
   watchAlerts: (userEmail, limit = 20) => request("GET", "/api/watch/alerts", { query: { user_email: userEmail, limit } }),
+  listClinics: (city, postalCode, limit = 25) =>
+    request("GET", "/api/clinics", { query: { city, postal_code: postalCode || undefined, limit } }),
+  clinicStats: () => request("GET", "/api/clinics/stats"),
+  refreshClinic: (url, city, postalCode) =>
+    request("POST", "/api/clinics/refresh", { body: { url, city, user_postal_code: postalCode || null } }),
   simulateOpening: (watchId) => request("POST", "/api/watch/simulate-opening", { body: watchId ? { watch_id: watchId } : {} }),
 };

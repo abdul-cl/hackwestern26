@@ -1,10 +1,12 @@
 """Clinic Watchdog storage: watched clinics in SQLite (backend/clinics.db). No FastAPI code here."""
 import contextlib
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parents[1] / "clinics.db"  # backend/clinics.db, wherever uvicorn is launched
+# backend/clinics.db wherever uvicorn is launched, or $DATA_DIR/clinics.db (a persistent volume on a host)
+DB_PATH = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1]) / "clinics.db"
 STATUSES = ("accepting", "waitlist", "closed")
 
 STATUS_LABELS = {"accepting": "accepting new patients", "waitlist": "has an open waitlist", "closed": "not accepting new patients"}
@@ -65,6 +67,13 @@ def list_watches(user_email: str | None = None) -> list[dict]:
             rows = conn.execute(sql.format("WHERE user_email = ?"), (user_email.strip(),)).fetchall()
         else:
             rows = conn.execute(sql.format("")).fetchall()
+    return [dict(r) for r in rows]
+
+
+def watches_for_url(url: str) -> list[dict]:
+    """Every watch on this clinic url (all users), for alerts from the background refresher."""
+    with contextlib.closing(connect()) as conn:
+        rows = conn.execute("SELECT * FROM watches WHERE url = ?", (url,)).fetchall()
     return [dict(r) for r in rows]
 
 

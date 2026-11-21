@@ -91,7 +91,8 @@ async def verify_doctor(req: models.VerifyDoctorRequest):
 
     def run() -> dict:
         try:
-            r = config.tinyfish_client(timeout=config.VERIFY_TIMEOUT + 15).agent.run(goal=verify_goal(name, city), url=CPSO_URL)
+            client = config.tinyfish_client(timeout=config.VERIFY_TIMEOUT + 15)  # keep a reference during the run
+            r = client.agent.run(goal=verify_goal(name, city), url=CPSO_URL)
             if r.status != "COMPLETED" or not r.result:
                 msg = r.error.message if r.error else f"run {r.status}"
                 return verify_result(False, "error", f"The CPSO lookup did not finish ({msg}). Try again, or search {CPSO_URL} directly.")
