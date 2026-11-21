@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_013tnZ6H4LF33nYwAWvaJ2sX",
+  "agent_id": "abda0aaaa25559d54",
+  "subagent_type": "general-purpose",
+  "task_description": "TinyFish track critique",
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 83691,
+    "cache_read_tokens": 228113,
+    "output_tokens": 2359,
+    "api_call_count": 4
+  },
+  "started_at": "2026-11-21T11:39:44.6915695-05:00",
+  "completed_at": "2026-11-21T11:40:09.5781393-05:00"
+}

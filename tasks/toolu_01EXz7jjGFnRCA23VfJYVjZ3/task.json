@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_01EXz7jjGFnRCA23VfJYVjZ3",
+  "agent_id": "a9857a38bf6bd7e45",
+  "subagent_type": "general-purpose",
+  "task_description": "Healthcare track critique",
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 86021,
+    "cache_read_tokens": 233550,
+    "output_tokens": 2383,
+    "api_call_count": 4
+  },
+  "started_at": "2026-11-21T11:39:44.6926486-05:00",
+  "completed_at": "2026-11-21T11:40:10.7601041-05:00"
+}

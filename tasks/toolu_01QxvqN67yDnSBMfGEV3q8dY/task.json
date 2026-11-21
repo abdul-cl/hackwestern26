@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_01QxvqN67yDnSBMfGEV3q8dY",
+  "agent_id": "ad152d722674904e7",
+  "subagent_type": "general-purpose",
+  "task_description": "Backend systems audit",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 125990,
+    "cache_read_tokens": 679997,
+    "output_tokens": 8116,
+    "api_call_count": 8
+  },
+  "started_at": "2026-11-21T11:39:44.7779357-05:00",
+  "completed_at": "2026-11-21T11:41:51.0376098-05:00"
+}
