@@ -1,11 +1,14 @@
 import asyncio
 import json
 import os
+import re
+from urllib.parse import urlparse
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -48,6 +51,31 @@ class ScanRequest(BaseModel):
     preferences: list[str] = []
     clinic_urls: list[str] = []
     use_cache: bool = False
+
+
+class DiscoverRequest(BaseModel):
+    city: str = "London, ON"
+    max_results: int = 5
+
+
+BLOCKED_DOMAINS = (
+    "yelp.", "reddit.", "facebook.", "instagram.", "twitter.", "x.com", "tiktok.", "youtube.",
+    "ratemds.", "google.", "vertexaisearch", "linkedin.", "wikipedia.", "yellowpages.",
+)
+
+
+def clean_urls(urls: list[str], limit: int) -> list[str]:
+    """Keep clean https clinic URLs, one per website, no social/directory sites."""
+    seen, out = set(), []
+    for url in urls:
+        host = urlparse(url).netloc.lower().removeprefix("www.")
+        if not url.startswith("https://") or not host or host in seen:
+            continue
+        if any(b in host for b in BLOCKED_DOMAINS):
+            continue
+        seen.add(host)
+        out.append(url)
+    return out[:limit]
 
 
 class RankRequest(BaseModel):
@@ -126,6 +154,94 @@ async def scan(req: ScanRequest):
     result = {"clinics": list(clinics)}
     save_cache(result)
     return result
+
+
+def sse(event: dict) -> str:
+    return "data: " + json.dumps(event) + "\n\n"
+
+
+@app.post("/api/scan/stream")
+async def scan_stream(req: ScanRequest):
+    """Same body as /api/scan; streams SSE events as each clinic finishes."""
+    urls = req.clinic_urls or DEFAULT_CLINIC_URLS
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def worker(url: str):
+        await queue.put({"type": "status", "url": url, "message": "Agent started scanning..."})
+        clinic = await asyncio.to_thread(scan_one, url)
+        await queue.put({"type": "clinic_result", "clinic": clinic})
+
+    async def events():
+        if req.use_cache and CACHE_PATH.exists():
+            cached = json.loads(CACHE_PATH.read_text(encoding="utf-8"))["clinics"]
+            for c in cached:
+                yield sse({"type": "clinic_result", "clinic": c})
+            yield sse({"type": "done", "total": len(cached)})
+            return
+        tasks = [asyncio.create_task(worker(u)) for u in urls]
+        results = []
+        try:
+            while len(results) < len(urls):
+                event = await queue.get()
+                if event["type"] == "clinic_result":
+                    results.append(event["clinic"])
+                yield sse(event)
+            save_cache({"clinics": results})
+            yield sse({"type": "done", "total": len(results)})
+        finally:
+            for t in tasks:
+                t.cancel()  # client disconnected
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class UrlPicks(BaseModel):
+    clinic_urls: list[str]
+
+
+def gemini_pick(city: str, candidates: list[dict], limit: int) -> list[str]:
+    """Gemini reads the search results and keeps only real family clinics in the city."""
+    prompt = (
+        f"Search results for family doctors in {city}, Ontario:\n{json.dumps(candidates)}\n\n"
+        f"Pick up to {limit} results that are the official website of a family medicine clinic, "
+        f"family health team or primary care practice actually located in {city}. "
+        "Exclude other cities, hospitals, walk-in-only clinics, specialists, pharmacies and directories. "
+        "Return the exact url values from the list, best first."
+    )
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL, contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=UrlPicks),
+    )
+    allowed = {c["url"] for c in candidates}
+    return [u for u in UrlPicks.model_validate_json(resp.text).clinic_urls if u in allowed][:limit]
+
+
+@app.post("/api/discover")
+def discover(req: DiscoverRequest):
+    """TinyFish searches the web, Gemini filters the results (Gemini search grounding has no quota on our key)."""
+    limit = max(1, min(req.max_results, 20))
+    urls: list[str] = []
+    try:
+        found = TinyFish().search.query(
+            f"family medicine clinic family health team accepting new patients {req.city} Ontario",
+            purpose="find official websites of family doctor clinics",
+        )
+        keep = set(clean_urls([r.url for r in found.results], 20))
+        candidates = [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in found.results if r.url in keep]
+        try:
+            urls = gemini_pick(req.city, candidates, limit)
+        except Exception as e:
+            print(f"[discover] Gemini filter failed, using unfiltered results: {str(e)[:150]}")
+        urls = urls or [c["url"] for c in candidates][:limit]
+    except Exception as e:
+        print(f"[discover] search failed: {str(e)[:200]}")
+    if not urls and req.city.strip().lower().startswith("london"):
+        urls = DEFAULT_CLINIC_URLS[:limit]
+    return {"city": req.city, "clinic_urls": urls}
 
 
 @app.post("/api/rank")

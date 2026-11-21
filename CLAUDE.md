@@ -17,6 +17,17 @@
     - Request: `{ "city": "London, ON", "preferences": ["string"], "clinic_urls": ["string"] }`
     - Response (streamed or JSON):
       `{ "clinics": [{ "name": "string", "url": "string", "status": "accepting | waitlist | closed", "evidence_quote": "string", "waitlist_url": "string | null", "raw_notes": "string" }] }`
+- `POST /api/scan/stream` (SSE, for the live agent activity feed)
+    - Request: same body as `/api/scan` (`city`, `preferences`, `clinic_urls`, `use_cache`).
+    - Response: `text/event-stream`. Each message is `data: <json>` followed by a blank line. Clinics scan in parallel, so results arrive in any order:
+      - `{ "type": "status", "url": "string", "message": "Agent started scanning..." }`
+      - `{ "type": "clinic_result", "clinic": { ...same clinic object as /api/scan... } }` (one per clinic, as soon as it finishes)
+      - `{ "type": "done", "total": 5 }` (last event)
+    - It is a POST, so use `fetch` + `response.body.getReader()` (not `EventSource`). With `use_cache: true` it replays `backend/fallback_cache.json` instantly.
+- `POST /api/discover` (find clinic websites for a city; feed the result into `/api/scan`)
+    - Request: `{ "city": "London, ON", "max_results": 5 }`
+    - Response: `{ "city": "London, ON", "clinic_urls": ["https://..."] }` (clean, deduplicated https URLs; no Yelp/Reddit/Facebook/RateMDs). TinyFish searches the web, then Gemini filters the results to real family clinics in that city (Gemini search grounding has no quota on our key). Usually 3-8s.
+    - If it fails or finds nothing for London, it returns our 5 default London URLs. For other cities the list may be empty.
 - `POST /api/rank`
     - Request: `{ "preferences": ["string"], "clinics": [...] }`
     - Response:
