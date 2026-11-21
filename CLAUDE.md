@@ -12,7 +12,7 @@
 # Commands
 - Backend run: `cd backend && uvicorn app.main:app --reload --port 8000`
 - Backend tests (no network, no API credits, ~1 min): `python backend/tests/run_all.py`
-- Deploy: see `DEPLOY.md` (website on Vercel from `frontend/`, API on Railway/Render from `backend/`; config in `frontend/vercel.json`, `backend/railway.json`, `backend/Procfile`, `backend/.python-version`, `render.yaml`).
+- Deploy: see `DEPLOY.md` (website on **Cloudflare Workers** static assets from `frontend/`, built from GitHub on every push; API on Railway/Render from `backend/`; config in `frontend/wrangler.jsonc` + `frontend/.node-version`, `backend/railway.json`, `backend/Procfile`, `backend/.python-version`, `render.yaml`). Local check of the Cloudflare build: `cd frontend && npm run cf:preview` (http://localhost:8787). `frontend/vercel.json` is only for the old Vercel deployment.
 - Frontend run: `cd frontend && npm install && npm run dev` (http://localhost:5173; needs Node.js LTS). Build check: `cd frontend && npm run build`.
 - Frontend backend URL: `frontend/src/config.js` (default `http://localhost:8000`), or override with `frontend/.env.local` → `VITE_API_URL=...` (and `VITE_API_KEY=...` if backend auth is on).
 
@@ -52,7 +52,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `PUBLIC_DEMO=1` — public deployment mode: visitors only get saved results (scan / stream / mission are forced to `use_cache`; `503` if `fallback_cache.json` is missing), `/api/apply`, `/api/verify-doctor`, `/api/discover`, `/api/watch/check` return `403`, and POSTs are rate-limited per visitor (`PUBLIC_RATE_LIMIT`, default 30 per 10 min, `429`). Requests with header `X-Admin-Key: <CARESCOUT_ADMIN_KEY>` skip all of this.
       - Public demo writes are locked down: a mission's `clinic_urls` are ignored (never stored); watchlists only work for the shared demo account `demo@carescout.ca` (`config.DEMO_EMAIL`): `POST`/`DELETE /api/watch` and `GET /api/watch` / `/api/watch/alerts` with any other `user_email` are `403`, `POST /api/watch` only accepts clinics already in the database, `simulate-opening` only touches demo watches, and missions only auto-watch for the demo email (others get "Watchdog skipped (watchlists use the demo account on the public demo)").
     - `CARESCOUT_ADMIN_KEY` — server-side secret that unlocks live agents in public mode (website: `localStorage.carescout_admin_key`, see DEPLOY.md). Never put it in a `VITE_` variable.
-    - `ALLOWED_ORIGIN_REGEX` — extra CORS pattern, e.g. Vercel preview URLs `https://carescout-[a-z0-9-]+\.vercel\.app`.
+    - `ALLOWED_ORIGIN_REGEX` — extra CORS pattern, e.g. Cloudflare preview builds `https://([a-z0-9-]+-)?carescout\.<subdomain>\.workers\.dev`.
     - `DATA_DIR` (default `backend/`) — folder for `clinics.db`. On Railway/Render point it at a persistent volume (e.g. `/data`) so the clinic database and watches survive redeploys.
     - `FRESH_HOURS` (default 12) — a clinic checked within this many hours is shown from the database without re-checking.
     - `MAX_STATUS_AGE_DAYS` (default 7) — availability older than this is **expired**: kept in the database but returned with `expired: true` and shown as "Needs a re-check" (last-seen status), never as current; not counted as accepting/closed, not auto-watched, ranked low.
