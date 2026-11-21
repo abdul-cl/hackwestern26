@@ -5,6 +5,24 @@ _agent_sem: asyncio.Semaphore | None = None
 _agent_sem_loop = None
 
 
+_searches = 0  # patient searches (missions) running right now
+
+
+def search_started() -> None:
+    global _searches
+    _searches += 1
+
+
+def search_finished() -> None:
+    global _searches
+    _searches = max(0, _searches - 1)
+
+
+def searches_running() -> bool:
+    """True while a patient's search is running: background jobs then leave the browser agents to it."""
+    return _searches > 0
+
+
 def agent_slots() -> asyncio.Semaphore:
     """Limits how many TinyFish agents run at once (one semaphore per event loop)."""
     global _agent_sem, _agent_sem_loop

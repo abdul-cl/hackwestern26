@@ -7,6 +7,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 from fastapi.testclient import TestClient
@@ -82,7 +83,7 @@ check("rank garbage -> JSON 502", r.status_code == 502 and "detail" in r.json(),
 urls = ["https://www.yelp.com/biz/x", "https://reddit.com/r/x", "https://m.facebook.com/p", "https://instagram.com/x",
         "https://www.ratemds.com/doctor", "https://maps.google.com/?q=x", "https://www.google.com/maps", "http://insecure.ca",
         "https://foxmedx.com/", "https://ldam.ca/a", "https://www.ldam.ca/b", "", "https://goo.gl/maps/x"]
-check("clean_urls", discovery.clean_urls(urls, 10) == ["https://foxmedx.com/", "https://ldam.ca/a"], str(discovery.clean_urls(urls, 10)))
+check("clean_urls (directories dropped too)", discovery.clean_urls(urls, 10) == ["https://foxmedx.com/"], str(discovery.clean_urls(urls, 10)))
 
 # --- cache safety
 check("load_cache missing -> None", cache.load_cache() is None)

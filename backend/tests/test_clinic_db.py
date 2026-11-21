@@ -9,6 +9,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, clinic_db, refresh, scanning, discovery, watchdog, geo, models
 from fastapi.testclient import TestClient
@@ -271,17 +272,28 @@ seed.write_text(json.dumps({"clinics": [
     {"url": "https://s2.ca", "name": "S2"},
     {"url": "https://bad.ca", "raw_notes": "scan failed: x", "status": "closed"},
 ]}), encoding="utf-8")
-config.CACHE_PATH.write_text(json.dumps({"clinics": [{"name": "C1", "url": "https://c1.ca", "status": "waitlist", "evidence_quote": "w",
-                                                       "waitlist_url": None, "raw_notes": "ok"}]}), encoding="utf-8")
-added = clinic_db.seed_if_empty(seed, config.CACHE_PATH, ["https://www.ldam.ca/find-a-doctor", "https://s1.ca/"])
-check("seed: seed file + cache + defaults, failed entries skipped, no duplicates", added == 4 and clinic_db.count() == 4, str(added))
+config.CACHE_PATH.write_text(json.dumps({"saved_at": "2026-11-02T00:00:00Z", "clinics": [
+    {"name": "C1", "url": "https://c1.ca", "status": "waitlist", "evidence_quote": "w", "waitlist_url": None, "raw_notes": "ok"},
+    {"name": "Dir", "url": "https://www.ldam.ca/find-a-doctor", "status": "accepting", "evidence_quote": "list", "waitlist_url": None, "raw_notes": ""}]}),
+    encoding="utf-8")
+added = clinic_db.seed_if_empty(seed, config.CACHE_PATH, ["https://d1.ca", "https://s1.ca/", "https://x.ca/find-a-doctor"])
+check("seed: seed file + cache + defaults, failed entries and directories skipped, no duplicates", added == 4 and clinic_db.count() == 4, str(added))
+check("seed: directories are never added", clinic_db.get("https://www.ldam.ca/find-a-doctor") is None and clinic_db.get("https://x.ca/find-a-doctor") is None)
 check("seed: statuses and times kept", clinic_db.get("https://s1.ca")["status"] == "accepting" and clinic_db.get("https://s1.ca")["last_checked"] == "2026-11-01T00:00:00Z"
-      and clinic_db.get("https://c1.ca")["status"] == "waitlist" and clinic_db.get("https://c1.ca")["last_checked"] and clinic_db.get("https://s2.ca")["status"] is None)
+      and clinic_db.get("https://c1.ca")["status"] == "waitlist" and clinic_db.get("https://c1.ca")["last_checked"] == "2026-11-02T00:00:00Z"
+      and clinic_db.get("https://s2.ca")["status"] is None)
 check("seed: no-op when the database has clinics", clinic_db.seed_if_empty(seed, config.CACHE_PATH, []) == 0)
 check("export_rows: checked clinics only", {r["url"] for r in clinic_db.export_rows()} == {"https://s1.ca", "https://c1.ca"})
 seed.write_text("{broken", encoding="utf-8")
 clinic_db.DB_PATH = tmp / "seed2.db"
 check("seed: broken seed file doesn't crash", clinic_db.seed_if_empty(seed, tmp / "missing.json", []) == 0)
+# a saved file with no date: its results count as expired ("Needs a re-check"), never "checked just now"
+clinic_db.DB_PATH = tmp / "seed3.db"
+undated = tmp / "undated.json"
+undated.write_text(json.dumps({"clinics": [{"name": "U", "url": "https://u.ca", "status": "accepting", "evidence_quote": "We accept new patients",
+                                            "waitlist_url": None, "raw_notes": ""}]}), encoding="utf-8")
+clinic_db.seed_if_empty(tmp / "missing.json", undated, [])
+check("seed: undated saved results are expired, not fresh", clinic_db.get("https://u.ca")["last_checked"] is None and clinic_db.is_expired(clinic_db.get("https://u.ca")))
 
 # ---------- endpoints ----------
 clinic_db.DB_PATH = tmp / "api.db"

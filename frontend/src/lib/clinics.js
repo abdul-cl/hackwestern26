@@ -42,6 +42,20 @@ export function mergeClinics(scanned, order, ranked) {
   return out;
 }
 
+/**
+ * Link to the clinic's page that scrolls to and highlights the quoted sentence (a "text fragment", supported by
+ * Chrome, Edge and Safari; other browsers just open the page). Uses the quote's first and last few words, so small
+ * differences in the middle (spacing, punctuation) don't break the match.
+ */
+export function quoteLink(url, quote) {
+  const words = String(quote || "").replace(/[“”"]/g, "").trim().split(/\s+/).filter(Boolean);
+  if (!url || words.length < 3) return url;
+  const enc = (s) => encodeURIComponent(s).replace(/-/g, "%2D").replace(/,/g, "%2C");
+  const text = words.length <= 10 ? enc(words.join(" ")) : `${enc(words.slice(0, 5).join(" "))},${enc(words.slice(-5).join(" "))}`;
+  const base = String(url).split("#")[0];
+  return `${base}#:~:text=${text}`;
+}
+
 export function clinicDomId(url) {
   return "clinic-" + String(url).replace(/[^a-zA-Z0-9]+/g, "-");
 }

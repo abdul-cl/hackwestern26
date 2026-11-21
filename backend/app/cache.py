@@ -2,6 +2,7 @@
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from . import config, common
 
 
@@ -50,7 +51,7 @@ def save_cache(clinics: list[dict]) -> None:
     try:
         fd, tmp = tempfile.mkstemp(dir=config.CACHE_PATH.parent, suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"clinics": clinics}, f, indent=2)
+            json.dump({"saved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "clinics": clinics}, f, indent=2)
         os.replace(tmp, config.CACHE_PATH)
     except Exception as e:
         print(f"[cache] could not save: {e}")

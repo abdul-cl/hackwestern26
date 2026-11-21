@@ -33,12 +33,19 @@ def scan_one(url: str) -> dict:
         r = run.result
         if not isinstance(r, dict):
             return common.failed_clinic(url, "scan failed: unexpected result format")
-        status = str(r.get("status") or "").lower()
+        status = str(r.get("status") or "").strip().lower()
+        quote = str(r.get("evidence_quote") or "").strip()
+        # Same bar as the quick page read: a status needs the clinic's own words behind it. An unclear answer is
+        # "couldn't check", never "closed" (a false "closed" would auto-watch the clinic and later fake an opening).
+        if status not in config.STATUSES:
+            return common.failed_clinic(url, f"scan failed: the agent couldn't tell if this clinic takes new patients ({status or 'no answer'})")
+        if len(quote) < 8:
+            return common.failed_clinic(url, "scan failed: the agent gave no quote from the page to back up its answer")
         return {
             "name": str(r.get("name") or url),
             "url": url,
-            "status": status if status in config.STATUSES else "closed",
-            "evidence_quote": str(r.get("evidence_quote") or ""),
+            "status": status,
+            "evidence_quote": quote[:600],
             "waitlist_url": r.get("waitlist_url") or None,
             "raw_notes": str(r.get("raw_notes") or ""),
             "address": str(r["address"]).strip()[:300] if r.get("address") else None,

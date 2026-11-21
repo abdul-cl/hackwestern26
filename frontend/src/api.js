@@ -108,6 +108,8 @@ export async function streamPost(path, body, onEvent, signal) {
 export const api = {
   health: () => request("GET", "/health"),
   missionStream: (body, onEvent, signal) => streamPost("/api/mission/stream", body, onEvent, signal),
+  rank: (clinics, language, coverageType) =>
+    request("POST", "/api/rank", { body: { clinics, preferences: [], language, coverage_type: coverageType } }),
   apply: (waitlistUrl, patientInfo) =>
     request("POST", "/api/apply", { body: { waitlist_url: waitlistUrl, patient_info: patientInfo } }),
   verifyDoctor: (doctorName, city) => request("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),

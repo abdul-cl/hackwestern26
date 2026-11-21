@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
-import { STAGES } from "../hooks/useMission";
+import { AlertTriangle, BellRing, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
+import { Link } from "react-router-dom";
+import { STAGES, recordedLabel } from "../hooks/useMission";
 
 function StepIcon({ status }) {
   if (status === "active") return <Loader2 className="h-4 w-4 animate-spin" />;
@@ -38,7 +39,14 @@ export default function AgentFeed({ state, onStop, onReset }) {
   return (
     <section className="card animate-card-in p-4" aria-live="polite">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-900">Live agent activity</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">{state.replay ? "Agent activity" : "Live agent activity"}</h2>
+          {state.replay && (
+            <span className="badge animate-pop-in bg-sky-50 text-sky-700 ring-sky-600/20" title="Demo searches replay a real CareScout search; ranking and the watchlist still run live">
+              Replay of a real search, {recordedLabel(state.replay.recordedAt)} ({state.replay.speed || 8}x speed)
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           {running ? (
             <button onClick={onStop} className="btn-ghost py-1 text-xs"><Square className="h-3.5 w-3.5" /> Stop</button>
@@ -119,9 +127,20 @@ export default function AgentFeed({ state, onStop, onReset }) {
           ))}
         </div>
       )}
+      {summary?.watched_count > 0 && state.watched?.[0] && (
+        <div className="mt-3 flex animate-slide-down flex-wrap items-center gap-3 rounded-xl bg-accent/60 px-4 py-3">
+          <BellRing className="h-5 w-5 shrink-0 text-pine-700" />
+          <p className="min-w-0 flex-1 text-sm text-ink">
+            Watching {summary.watched_count} full clinic{summary.watched_count === 1 ? "" : "s"}. When one starts taking patients, you get an alert.
+          </p>
+          <Link to={`/watchdog?simulate=${state.watched[0].id}`} className="btn-primary py-1.5">See what the alert looks like</Link>
+        </div>
+      )}
       {summary && (summary.from_database != null || summary.rechecked != null) && (
         <p className="mt-2 text-xs text-slate-500">
-          {summary.from_database ?? 0} from the CareScout database, {summary.rechecked ?? 0} checked live, in {summary.duration_s}s.
+          {summary.replay_recorded_at
+            ? `${summary.rechecked ?? 0} clinic websites checked by CareScout's agents in a real search recorded ${recordedLabel(summary.replay_recorded_at)}, replayed here; ranked live just now.`
+            : `${summary.from_database ?? 0} from the CareScout database, ${summary.rechecked ?? 0} checked live, in ${summary.duration_s}s.`}
           {summary.expired_count ? ` ${summary.expired_count} saved result${summary.expired_count === 1 ? " is" : "s are"} older than a week and marked "Needs a re-check".` : ""}
         </p>
       )}

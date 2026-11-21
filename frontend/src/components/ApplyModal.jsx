@@ -49,7 +49,10 @@ export default function ApplyModal({ clinic, defaults, onClose }) {
 
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">
           <Hand className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>CareScout fills in the form for you and <b>pauses before Submit</b>. You review and submit it yourself on the clinic's website.</span>
+          <span>
+            CareScout fills in the form for you and <b>pauses before Submit</b>. You review and submit it yourself on the clinic's website.
+            Your details are sent to TinyFish, whose browser agent types them into this form.
+          </span>
         </div>
 
         {publicDemo && (

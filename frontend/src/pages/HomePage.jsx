@@ -39,7 +39,7 @@ const FEATURES = [
 
 const PROMISES = [
   { icon: Hand, title: "Nothing is submitted without you", text: "Forms are filled and left for you to review. CareScout never presses Submit." },
-  { icon: Lock, title: "Your details stay with your search", text: "Your name and contact details are only used to fill the form you ask for." },
+  { icon: Lock, title: "Your details go only where you send them", text: "Your contact details are only sent when you ask CareScout to fill a form, to the TinyFish browser agent that types them in. Nothing is sold or shared." },
   { icon: ShieldCheck, title: "Answers come from the source", text: "Every status shows the sentence from the clinic's own website, so you can check it." },
 ];
 

@@ -24,6 +24,10 @@ export const DEFAULT_SEARCH = {
 
 export const MAX_CLINICS = 25;
 
+// The shared demo watchlist (same as the backend's DEMO_EMAIL). Demo searches auto-watch full clinics with it, so the
+// Watchdog / opening-alert part of the demo always has something to show; on the public demo it's the only one allowed.
+export const DEMO_EMAIL = "demo@carescout.ca";
+
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];
 

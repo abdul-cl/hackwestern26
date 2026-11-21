@@ -36,6 +36,15 @@ def is_failed(clinic: dict) -> bool:
     return str(clinic.get("raw_notes", "")).startswith(FAIL_PREFIXES)
 
 
+# Doctor directories / referral lists: useful to a patient, but not a clinic they can join. Never shown as one.
+DIRECTORY_MARKERS = ("ldam.ca", "find-a-doctor", "findadoctor", "find_a_doctor", "doctor-directory", "physician-directory")
+
+
+def is_directory_url(url: str) -> bool:
+    u = (url or "").lower()
+    return any(m in u for m in DIRECTORY_MARKERS)
+
+
 def sse(event: dict) -> str:
     return "data: " + json.dumps(event) + "\n\n"
 

@@ -72,9 +72,22 @@ _hits: dict[str, deque] = {}
 
 
 def client_ip(request: Request) -> str:
-    """The visitor's IP (hosts like Railway/Render put it first in X-Forwarded-For)."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    """The visitor's IP for rate limiting. Railway/Render append the address they saw to X-Forwarded-For, so the
+    trusted entry is TRUSTED_PROXY_HOPS from the end. The first entry is whatever the client sent (easy to fake)."""
+    hops = config.TRUSTED_PROXY_HOPS
+    parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if hops and len(parts) >= hops:
+        return parts[-hops]
+    return request.client.host if request.client else "unknown"
+
+
+def _trim_hits(now: float) -> None:
+    """Keep the rate-limit table small without resetting everyone: drop idle visitors, then the oldest."""
+    for ip in [ip for ip, q in _hits.items() if not q or now - q[-1] > RATE_WINDOW_S]:
+        del _hits[ip]
+    if len(_hits) > 10_000:
+        for ip in sorted(_hits, key=lambda k: _hits[k][-1])[: len(_hits) - 5_000]:
+            del _hits[ip]
 
 
 def public_guard(request: Request):
@@ -95,7 +108,7 @@ def public_guard(request: Request):
             raise HTTPException(status_code=429, detail="Too many requests from this device. Try again in a few minutes.")
         q.append(now)
         if len(_hits) > 10_000:  # don't let the table grow forever
-            _hits.clear()
+            _trim_hits(now)
 
 
 @contextlib.asynccontextmanager

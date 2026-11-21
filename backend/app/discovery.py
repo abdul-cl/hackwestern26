@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter
 
-from . import config, llm, models
+from . import config, common, llm, models
 
 router = APIRouter()
 BLOCKED_DOMAINS = (
@@ -22,7 +22,7 @@ def clean_urls(urls: list[str], limit: int) -> list[str]:
         host = (urlparse(url).hostname or "").lower().removeprefix("www.")
         if not url.startswith("https://") or not host or host in seen:
             continue
-        if any(host == d or host.endswith("." + d) for d in BLOCKED_DOMAINS):
+        if any(host == d or host.endswith("." + d) for d in BLOCKED_DOMAINS) or common.is_directory_url(url):
             continue
         seen.add(host)
         out.append(url)
