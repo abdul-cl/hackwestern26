@@ -204,5 +204,57 @@ notify._post = lambda payload: (_ for _ in ()).throw(RuntimeError("down"))
 check("email failure never breaks saving alerts", watchdog.save_alerts([alert], {w["id"]: "patient@gmail.com"}) is None)
 config.RESEND_API_KEY = ""
 
+# ---- phone numbers and call scripts are checked against the clinic's own data
+src_phone_only = {"url": "https://p.ca", "waitlist_url": None, "raw_notes": "Call (519) 555-0142 to register.", "evidence_quote": "", "address": None}
+r1 = {"phone_number": "519-555-0142", "call_script": "Hello..."}
+ranking.enforce_contact_rules(r1, src_phone_only)
+check("real number from the site is kept, with its call script", r1["phone_number"] == "519-555-0142" and r1["call_script"] == "Hello...")
+r2 = {"phone_number": "519-555-9999", "call_script": "Hello..."}
+ranking.enforce_contact_rules(r2, src_phone_only)
+check("a number that isn't on the site is dropped (and so is the script)", r2["phone_number"] is None and r2["call_script"] is None, str(r2))
+r3 = {"phone_number": None, "call_script": "Hello..."}
+ranking.enforce_contact_rules(r3, {**src_phone_only, "raw_notes": "No phone listed."})
+check("no number: no call script", r3["call_script"] is None)
+r4 = {"phone_number": "519-555-0142", "call_script": "Hello..."}
+ranking.enforce_contact_rules(r4, {**src_phone_only, "waitlist_url": "https://p.ca/form"})
+check("clinic with an online form: number kept, no call script", r4["phone_number"] == "519-555-0142" and r4["call_script"] is None)
+
+# ---- Auto-Fill on the public demo: on, but only for known clinic forms and within limits
+config.PUBLIC_DEMO, config.PUBLIC_APPLY, config.PUBLIC_APPLY_PER_HOUR, config.PUBLIC_APPLY_PER_DAY = True, True, 2, 40
+m._apply_hits.clear(); m._apply_day.clear()
+check("health tells the site Auto-Fill is available", client.get("/health").json() == {"status": "ok", "public_demo": True, "apply": True})
+clinic_db.add_url("https://known.ca", "London, ON")
+clinic_db.save_check("https://known.ca", "London, ON", {"name": "K", "url": "https://known.ca", "status": "accepting", "evidence_quote": "We accept new patients",
+                     "waitlist_url": "https://forms.example-host.com/k/123", "raw_notes": "", "address": None, "lat": None, "lng": None}, None, "page")
+use_agent({"filled": {"Name": "T"}, "summary": "ok", "submitted": False})
+H = {"X-Forwarded-For": "8.8.8.8"}
+r = client.post("/api/apply", json={"waitlist_url": "https://forms.example-host.com/k/123/", "patient_info": pi}, headers=H)
+check("public: Auto-Fill works for a form CareScout found", r.status_code == 200 and r.json()["status"] == "ready_for_review", r.text)
+r = client.post("/api/apply", json={"waitlist_url": "https://attacker.example/form", "patient_info": pi}, headers=H)
+check("public: any other address is refused (403)", r.status_code == 403 and "clinic forms CareScout found" in r.json()["detail"], r.text)
+r = client.post("/api/apply/stream", json={"waitlist_url": "https://forms.example-host.com/k/123", "patient_info": pi}, headers=H)
+check("public: per-visitor hourly limit (429)", r.status_code == 429 and "Auto-Fill" in r.json()["detail"], r.text)
+r = client.post("/api/apply", json={"waitlist_url": "https://forms.example-host.com/k/123", "patient_info": pi}, headers={"X-Forwarded-For": "9.9.9.9"})
+check("public: another visitor still can", r.status_code == 200, r.text)
+config.PUBLIC_APPLY_PER_DAY = 3
+r = client.post("/api/apply", json={"waitlist_url": "https://forms.example-host.com/k/123", "patient_info": pi}, headers={"X-Forwarded-For": "6.6.6.6"})
+check("public: site-wide daily limit (429)", r.status_code == 429 and "today's limit" in r.json()["detail"], r.text)
+config.PUBLIC_APPLY = False
+check("PUBLIC_APPLY=0: off for visitors (403), and health says so",
+      client.post("/api/apply", json={"waitlist_url": "https://forms.example-host.com/k/123", "patient_info": pi}).status_code == 403
+      and client.get("/health").json()["apply"] is False)
+config.ADMIN_KEY = "adm"
+check("admin key skips the limits", client.post("/api/apply", json={"waitlist_url": "https://anything.ca/f", "patient_info": pi}, headers={"X-Admin-Key": "adm"}).status_code == 200)
+
+# ---- reading the feedback comments: team only
+r = client.get("/api/feedback")
+check("public: comments need the admin key (403)", r.status_code == 403, r.text)
+r = client.get("/api/feedback", headers={"X-Admin-Key": "adm"})
+items = r.json().get("feedback", [])
+check("admin: every answer with its comment, newest first", r.status_code == 200 and items and items[-1]["comment"] == "Found one!"
+      and items[0]["id"] > items[-1]["id"] and r.json()["summary"]["count"] == len(items), r.text[:300])
+config.PUBLIC_DEMO, config.PUBLIC_APPLY, config.PUBLIC_APPLY_PER_DAY, config.ADMIN_KEY = False, True, 40, ""
+check("local (no admin key set): comments readable", client.get("/api/feedback").status_code == 200)
+
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))
 sys.exit(1 if fails else 0)

@@ -151,13 +151,20 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         </div>
       )}
 
+      {!failed && clinic.ranked && !clinic.waitlist_url && !clinic.phone_number && (
+        <p className="mt-3 text-xs text-slate-500">
+          Their website doesn't list an online form or a phone number for new patients.{" "}
+          <a href={clinic.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium text-pine-700 hover:underline">Visit their site</a> to see how to join.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
         {clinic.waitlist_url ? (
           <button onClick={() => onApply(clinic)} className="btn-primary py-1.5">
             <FileSignature className="h-4 w-4" /> Auto-Fill Waitlist
           </button>
         ) : (
-          !failed && (
+          // phone-only clinics: the script needs a number to call (the backend drops numbers it can't find on the site)
+          !failed && clinic.phone_number && (
             <button onClick={() => toggle("call")} className={`btn-secondary py-1.5 ${panel === "call" ? "bg-slate-100" : ""}`}>
               <Phone className="h-4 w-4" /> {panel === "call" ? "Hide Call Script" : "View Call Script"}
             </button>
