@@ -73,3 +73,16 @@ def gemini_client() -> genai.Client:
 
 WATCHDOG_INTERVAL_MIN = float(os.getenv("WATCHDOG_INTERVAL_MIN", "0") or 0)  # 0 = off
 STATUSES = ("accepting", "waitlist", "closed")
+
+# ---------- Clinic database (see clinic_db.py / refresh.py) ----------
+# Where clinics.db lives. On Railway/Render point this at a persistent volume (e.g. /data) so it survives redeploys.
+DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
+SEED_PATH = BACKEND_DIR / "seed_clinics.json"  # clinics loaded into an empty database on startup
+SEED_ON_START = os.getenv("CARESCOUT_SEED", "1").strip().lower() not in ("0", "false", "no")
+FRESH_HOURS = float(os.getenv("FRESH_HOURS", "12"))  # a clinic checked within this many hours isn't re-checked in "auto" mode
+REFRESH_INTERVAL_MIN = float(os.getenv("REFRESH_INTERVAL_MIN", "0") or 0)  # background re-check of stale clinics; 0 = off
+REFRESH_BATCH = int(os.getenv("REFRESH_BATCH", "20"))  # clinics per background run
+REFRESH_ALLOW_AGENT = os.getenv("REFRESH_ALLOW_AGENT", "1").strip().lower() not in ("0", "false", "no")  # browser-agent fallback
+MAX_MISSION_CLINICS = 25  # most clinics one search may include
+FETCH_CONCURRENCY = 4  # quick page reads at once
+GEMINI_RPM = float(os.getenv("GEMINI_RPM", "12"))  # Gemini calls per minute for page reading (free tier allows ~15)

@@ -6,6 +6,9 @@ from types import SimpleNamespace as NS
 
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
+import os as _os, tempfile as _tempfile
+_os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
+_os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
 import app.main as m
 from app import config, scanning, discovery, ranking, watchdog
 from fastapi.testclient import TestClient

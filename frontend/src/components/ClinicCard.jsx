@@ -1,7 +1,8 @@
 import { forwardRef, useState } from "react";
-import { BellPlus, Check, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, ShieldCheck } from "lucide-react";
+import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
-import { displayStatus, isFailedScan } from "../lib/clinics";
+import { checkedLabel, displayStatus, isFailedScan } from "../lib/clinics";
+import { useAppState } from "../state/AppState";
 import StatusBadge from "./StatusBadge";
 import CallScript from "./CallScript";
 import VerifyDoctor from "./VerifyDoctor";
@@ -28,11 +29,28 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
   const [panel, setPanel] = useState(null); // "call" | "verify" | null
   const [watchEmail, setWatchEmail] = useState("");
   const [watchState, setWatchState] = useState({ loading: false, done: false, error: null, askEmail: false });
+  const { publicDemo, search, mission } = useAppState();
+  const [recheck, setRecheck] = useState({ loading: false, note: null, error: null });
+  const checked = checkedLabel(clinic);
   const failed = isFailedScan(clinic);
   const status = displayStatus(clinic);
   const host = String(clinic.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
 
   const toggle = (p) => setPanel((cur) => (cur === p ? null : p));
+
+  // Re-check this one clinic now (quick page read; a browser agent if the site needs one).
+  const recheckNow = async () => {
+    setRecheck({ loading: true, note: null, error: null });
+    try {
+      const r = await api.refreshClinic(clinic.url, city, search.postalCode);
+      mission.updateClinic(r.clinic);
+      const note = r.method === "failed" ? `Couldn't re-check right now (${r.error}). Showing the last saved result.`
+        : r.status_changed ? "Status changed since the last check." : r.method === "unchanged" ? "No change on the clinic's website." : "Up to date.";
+      setRecheck({ loading: false, note, error: null });
+    } catch (e) {
+      setRecheck({ loading: false, note: null, error: e.message });
+    }
+  };
 
   const watch = async () => {
     const userEmail = (email || watchEmail).trim();
@@ -99,6 +117,14 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         </div>
       )}
 
+      {(checked || recheck.note || recheck.error) && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          {checked && <span className="flex items-center gap-1 text-slate-400"><Clock className="h-3.5 w-3.5" />{checked}</span>}
+          {recheck.note && <span className="text-pine-700">{recheck.note}</span>}
+          {recheck.error && <span className="text-rose-700">{recheck.error}</span>}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
         {clinic.waitlist_url ? (
           <button onClick={() => onApply(clinic)} className="btn-primary py-1.5">
@@ -114,6 +140,11 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         <button onClick={() => toggle("verify")} className={`btn-secondary py-1.5 ${panel === "verify" ? "bg-slate-100" : ""}`}>
           <ShieldCheck className="h-4 w-4" /> Verify Doctor (CPSO)
         </button>
+        {!publicDemo && /^https?:\/\//.test(clinic.url) && (
+          <button onClick={recheckNow} disabled={recheck.loading} className="btn-ghost py-1.5" title="Check this clinic's website again now">
+            <RefreshCw className={`h-4 w-4 ${recheck.loading ? "animate-spin" : ""}`} /> {recheck.loading ? "Checking..." : "Re-check"}
+          </button>
+        )}
         {status === "closed" && (
           watchState.done ? (
             <span className="btn py-1.5 text-emerald-700"><Check className="h-4 w-4" /> Watching</span>

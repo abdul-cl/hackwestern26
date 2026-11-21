@@ -25,9 +25,13 @@ Deploy the API first, because the website needs its URL.
    | `CARESCOUT_ADMIN_KEY` | a long random string (your personal unlock; keep it secret) |
    | `DISABLE_DOCS` | `1` |
    | `ALLOWED_ORIGINS` | fill in after step 2, e.g. `https://carescout.vercel.app` |
+   | `DATA_DIR` | `/data` (see the volume step below) |
+   | `REFRESH_INTERVAL_MIN` | `180` (re-check out-of-date clinics every 3 hours; `0` = off) |
+   | `REFRESH_ALLOW_AGENT` | `0` to keep the background job to quick page reads only (no TinyFish agent credits) |
 
-4. **Settings** → **Networking** → **Generate Domain**. You get something like `https://carescout-api.up.railway.app`.
-5. Check it: open `https://<your-api-domain>/health` → `{"status":"ok","public_demo":true}`.
+4. **Add a volume** so the clinic database survives redeploys: right-click the service (or the canvas) → **Volume** → attach it to the service with mount path **`/data`** (matches `DATA_DIR`). On first start the database is filled from `backend/seed_clinics.json`.
+5. **Settings** → **Networking** → **Generate Domain**. You get something like `https://carescout-api.up.railway.app`.
+6. Check it: open `https://<your-api-domain>/health` → `{"status":"ok","public_demo":true}`.
 
 **Render instead?** Render → **New** → **Blueprint** → pick this repo; it reads `render.yaml`. Type in the two API keys and `ALLOWED_ORIGINS` when asked. Render's free plan sleeps after ~15 minutes idle (the first request then takes about a minute), so open `/health` a few minutes before you present.
 

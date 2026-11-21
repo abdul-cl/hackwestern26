@@ -11,7 +11,11 @@ export const DEFAULT_SEARCH = {
   language: "English",
   email: "",
   useCache: false,
+  maxClinics: 5, // how many clinics one search includes (1-25)
+  recheckAll: false, // true: re-check every clinic live, even ones checked recently
 };
+
+export const MAX_CLINICS = 25;
 
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];

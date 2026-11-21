@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { DEFAULT_SEARCH } from "../config";
+import { DEFAULT_SEARCH, MAX_CLINICS } from "../config";
 import { useMission } from "../hooks/useMission";
 
 const AppStateContext = createContext(null);
@@ -61,6 +61,8 @@ export function AppStateProvider({ children }) {
         user_email: s.email.trim() || null,
         auto_watch_closed: true,
         use_cache: s.useCache || publicDemo,
+        max_clinics: Math.max(1, Math.min(MAX_CLINICS, Number(s.maxClinics) || 5)),
+        refresh: s.recheckAll ? "all" : "auto",
       });
     },
     [search, mission, publicDemo],

@@ -23,6 +23,9 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 - `models.py` — every request/response Pydantic model (with the size caps).
 - `common.py` — shared helpers: URL check, Gemini JSON parsing, SSE formatting + keep-alives, failed-clinic helpers.
 - `cache.py` — `fallback_cache.json` load/merge/save.
+- `clinic_db.py` — **clinic database** (SQLite table `clinics` in `clinics.db`): every known clinic, its details, latest availability, `last_checked`, page fingerprint; seeded from `backend/seed_clinics.json` on startup when empty.
+- `refresh.py` — quick re-checks: fetch the page → skip if its text is unchanged → Gemini reads it (its evidence quote must really be on the page) → TinyFish browser agent only as fallback; Watchdog alerts on status change; background refresher loop.
+- `clinics_api.py` — `GET /api/clinics`, `GET /api/clinics/stats`, `POST /api/clinics/refresh`, `POST /api/clinics/seed`.
 - `agents.py` — TinyFish agent limiter (`TINYFISH_MAX_AGENTS`) + timeouts for all agent calls.
 - `geo.py` — Nominatim geocoding (cache, rate limit, circuit breaker), address clean-up, distance.
 - `scanning.py` — `POST /api/scan`, `POST /api/scan/stream`, scan prompt, geocoding attach.
@@ -32,7 +35,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 - `cpso.py` — `POST /api/verify-doctor`.
 - `orchestrator.py` — `POST /api/mission/stream`.
 - `watch_api.py` — all `/api/watch*` endpoints + background auto-check loop.
-- `watchdog.py` — SQLite storage for watches and alerts (no FastAPI code).
+- `watchdog.py` — SQLite storage for watches and alerts (no FastAPI code). Same `clinics.db` file as `clinic_db.py`, in `DATA_DIR`.
 - New endpoint? Add it to the matching module (or a new module with `router = APIRouter()` + `app.include_router(...)` in `main.py`), its models to `models.py`, settings to `config.py`, and tests to `backend/tests/`.
 
 # API Contract (Source of Truth)
@@ -47,6 +50,10 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `PUBLIC_DEMO=1` — public deployment mode: visitors only get saved results (scan / stream / mission are forced to `use_cache`; `503` if `fallback_cache.json` is missing), `/api/apply`, `/api/verify-doctor`, `/api/discover`, `/api/watch/check` return `403`, and POSTs are rate-limited per visitor (`PUBLIC_RATE_LIMIT`, default 30 per 10 min, `429`). Requests with header `X-Admin-Key: <CARESCOUT_ADMIN_KEY>` skip all of this.
     - `CARESCOUT_ADMIN_KEY` — server-side secret that unlocks live agents in public mode (website: `localStorage.carescout_admin_key`, see DEPLOY.md). Never put it in a `VITE_` variable.
     - `ALLOWED_ORIGIN_REGEX` — extra CORS pattern, e.g. Vercel preview URLs `https://carescout-[a-z0-9-]+\.vercel\.app`.
+    - `DATA_DIR` (default `backend/`) — folder for `clinics.db`. On Railway/Render point it at a persistent volume (e.g. `/data`) so the clinic database and watches survive redeploys.
+    - `FRESH_HOURS` (default 12) — a clinic checked within this many hours is shown from the database without re-checking.
+    - `REFRESH_INTERVAL_MIN` (default `0` = off) — background job re-checking the most out-of-date clinics every N minutes (`REFRESH_BATCH`, default 20 per run; `REFRESH_ALLOW_AGENT=0` to never use browser agents there). Status changes fire Watchdog alerts.
+    - `GEMINI_RPM` (default 12) — spacing for page-reading Gemini calls (free tier ~15/min). `CARESCOUT_SEED=0` skips loading `seed_clinics.json` into an empty database.
     - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network (hosts like Railway/Render need it; their start command sets it).
 - **Size limits:** `clinic_urls` ≤ 20 after dedup, `clinics` (rank) ≤ 30, `preferences` ≤ 20, `city` ≤ 100 chars, patient fields capped (name 120, email 200, phone 40, postal_code 12).
 - `POST /api/scan`
@@ -96,24 +103,26 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 
 - `POST /api/mission/stream` (**flagship**: the whole pipeline in one live SSE stream, for the "Mission Control" dashboard)
     - Request (all optional):
-      `{ "city": "London, ON", "user_postal_code": null, "preferences": [], "language": "English", "coverage_type": "OHIP", "user_email": null, "auto_watch_closed": true, "use_cache": false, "clinic_urls": [], "max_clinics": 5 }`
-      - `clinic_urls`: if given, skips discovery and scans these (max 20). `max_clinics`: how many clinics discovery returns (1-10).
-      - `use_cache: true`: offline/demo mode, replays `fallback_cache.json` (no discovery, no TinyFish, no API key needed); ranking still calls Gemini (needs network).
-    - Pipeline: Scout Agent (`/api/discover` logic) → Browser Swarm (parallel TinyFish scans + geocoding, max 2 agents at once) → Triage Agent (`/api/rank` logic, Gemini) → Watchdog auto-enroll.
+      `{ "city": "London, ON", "user_postal_code": null, "preferences": [], "language": "English", "coverage_type": "OHIP", "user_email": null, "auto_watch_closed": true, "use_cache": false, "clinic_urls": [], "max_clinics": 5, "refresh": "auto" }`
+      - `max_clinics`: how many clinics this search includes, **1-25** (the user picks it; closest to `user_postal_code` first).
+      - `refresh`: `"auto"` (default: clinics checked in the last `FRESH_HOURS` come straight from the database, the rest are re-checked live), `"all"` (re-check every clinic live), `"none"` (database only, like demo mode).
+      - `clinic_urls`: if given, skips the database lookup / web search and checks these (max 20).
+      - `use_cache: true` (demo mode; always on for the public demo): database only, nothing live, no TinyFish key needed; if the database has nothing saved for the city it replays `fallback_cache.json`. Ranking still calls Gemini (needs network).
+    - Pipeline: Scout (clinic database; web search via `/api/discover` logic only when the database has fewer than `max_clinics` for the city) → re-check what's out of date (quick page read + Gemini, TinyFish browser agent only as fallback, max 2 agents at once) + geocoding → Triage Agent (`/api/rank` logic, Gemini) → Watchdog auto-enroll. Every result is saved to the database.
     - SSE events (`data: <json>` + blank line; `:` lines are keep-alives, ignore them), in this order:
-      - `{ "type": "stage", "stage": "discover", "message": "Scout Agent searching for clinics in London, ON..." }`
+      - `{ "type": "stage", "stage": "discover", "message": "Scout Agent looking for clinics in London, ON..." }` (more `discover` stage messages may follow, e.g. "Found 12 clinics in the CareScout database.")
       - `{ "type": "discovered", "urls": ["https://..."] }` (London never ends up empty: falls back to the 5 defaults)
-      - `{ "type": "stage", "stage": "scan", "message": "Dispatching TinyFish agents to 5 clinics..." }`
-      - `{ "type": "agent_status", "url": "string", "message": "Queued: waiting for a free agent..." | "Agent started scanning..." }` (2 per clinic; live mode only)
-      - `{ "type": "clinic_scanned", "clinic": { ...Clinic, same as /api/scan incl. address/lat/lng/distance_km... } }` (one per clinic, any order)
+      - `{ "type": "stage", "stage": "scan", "message": "3 clinics are up to date; checking 2 clinic websites..." }`
+      - `{ "type": "agent_status", "url": "string", "message": "string" }` per clinic: `"Up to date (checked 3 h ago)"` (from the database, instant), or live progress: `"Reading the clinic's website..."`, `"Following the clinic's new-patient link..."`, `"Quick read didn't work; waiting for a browser agent..."`, `"Agent started scanning..."`.
+      - `{ "type": "clinic_scanned", "clinic": { ...Clinic, same as /api/scan incl. address/lat/lng/distance_km, plus last_checked / checked_via... } }` (one per clinic, any order)
       - `{ "type": "stage", "stage": "rank", "message": "Gemini Triage Agent ranking & translating results..." }`
       - `{ "type": "ranked", "ranked_clinics": [ ...same as /api/rank... ] }`
       - `{ "type": "stage", "stage": "watch", "message": "..." }` then `{ "type": "watched", "count": 2, "clinics": [ <watch record>, ... ] }` (only if `auto_watch_closed` and `user_email`; otherwise just a `stage` event saying "Watchdog skipped (...)")
       - `{ "type": "error", "stage": "discover | rank | watch | mission", "message": "string" }` (a stage failed; the mission continues)
-      - `{ "type": "done", "summary": { "total_scanned": 5, "accepting_count": 1, "waitlist_count": 1, "closed_count": 2, "failed_count": 1, "watched_count": 2, "ranked": true, "top_clinic": "string | null", "duration_s": 95.3 } }` (ALWAYS the last event)
+      - `{ "type": "done", "summary": { "total_scanned": 5, "accepting_count": 1, "waitlist_count": 1, "closed_count": 2, "failed_count": 1, "watched_count": 2, "ranked": true, "top_clinic": "string | null", "duration_s": 95.3, "from_database": 3, "rechecked": 2 } }` (ALWAYS the last event)
     - Only clinics that scanned successfully as `closed` are auto-watched (a failed scan is not "closed"). Re-running never duplicates watches.
     - `422` for a bad `user_email` / too many `clinic_urls` / oversized lists; `500` before the stream starts if the server's TinyFish key is missing (live mode).
-    - Takes about as long as a scan (~3-6 min for 5 clinics) plus a few seconds for discovery and ranking.
+    - Timing: clinics fresh in the database are instant; quick re-checks take a few seconds each; only sites that need a browser agent take 1-3 min each (2 at a time). Demo mode is a few seconds in total (just ranking).
 - `POST /api/verify-doctor` (check a doctor on the official CPSO public register, https://doctors.cpso.on.ca/)
     - Request: `{ "doctor_name": "Jane Smith", "city": "London" }` (`doctor_name` 2-100 chars, a leading "Dr." is ignored; `city` optional, default `"London"`)
     - Response (always HTTP 200 with this shape once the request is valid):
@@ -123,6 +132,13 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
       - `profile_url` is only ever a `https://doctors.cpso.on.ca/...` link. `cpso_number` is digits only. `languages` may be `[]`.
       - Uses one TinyFish agent (shares the 2-agent limit with scans). Found results are cached in memory for 1 hour, so repeat lookups are instant.
     - `422` for a missing/too-short `doctor_name`; `500` only if the server's TinyFish key is missing.
+- **Clinic database endpoints** (`clinics_api.py`). Extra fields on Clinic objects from the database / mission: `"last_checked": "2026-11-21T14:03:00Z | null"`, `"checked_via": "page | agent | saved | null"` (page = quick read of the clinic's website, agent = TinyFish browser agent, saved = seed / demo data).
+- `GET /api/clinics?city=London, ON&postal_code=N6A 3K7&limit=25&include_unchecked=false`
+    - Response: `{ "city": "string", "clinics": [ <Clinic + last_checked / checked_via, distance_km if postal_code> ], "stats": <stats> }`, closest first (accepting first without a postal code). Instant; allowed on the public demo.
+- `GET /api/clinics/stats` → `{ "total": 40, "checked": 36, "fresh": 30, "by_status": { "accepting": 9, "waitlist": 7, "closed": 20 }, "cities": ["London, ON"], "last_refresh": "ISO | null" }`
+- `POST /api/clinics/refresh` `{ "url": "https://...", "city": "London, ON", "user_postal_code": null }` ("Re-check" button on a card)
+    - Re-checks one clinic now (always re-reads, even if unchanged). Response: `{ "clinic": <Clinic>, "method": "unchanged | page | agent | failed", "status_changed": false, "error": "string | null" }`. On `failed` the last good result is returned when there is one. `403` on the public demo.
+- `POST /api/clinics/seed` `{ "city": "London, ON", "max_new": 10 }` → web search for more clinics in that city (1-20); new ones are added and checked in the background. Response `{ "city", "added": [...], "found": [...], "total": 41 }`. `403` on the public demo.
 - **Clinic Watchdog** (code in `backend/app/watchdog.py`; data in `backend/clinics.db`, SQLite, git-ignored, survives restarts). A watch record is
   `{ "id": 1, "clinic_name": "string", "url": "string", "last_status": "accepting | waitlist | closed", "user_email": "string", "created_at": "2026-11-21T14:03:00Z", "last_checked": "2026-11-21T14:10:00Z | null" }`
   (timestamps are UTC ISO-8601; `last_checked` is null until the first successful check).
@@ -185,6 +201,7 @@ interface Clinic {            // from /api/scan and /api/scan/stream
   name: string; url: string; status: ClinicStatus;
   evidence_quote: string; waitlist_url: string | null; raw_notes: string;
   address: string | null; lat: number | null; lng: number | null; distance_km: number | null;
+  last_checked?: string | null; checked_via?: "page" | "agent" | "saved" | null;   // from the database / mission
 }
 interface RankedClinic {      // from /api/rank (no lat / lng: join to Clinic by `url`)
   name: string; url: string | null; score: number; reason: string; requirements: string[]; next_step: string;
@@ -280,7 +297,7 @@ type MissionEvent =
 - After editing code, run the relevant health check or build command to verify zero errors. For `backend/`, run `python backend/tests/run_all.py` (all suites must pass) and add/adjust tests in `backend/tests/` for new behavior. Tests must never touch the real `backend/clinics.db` or `backend/fallback_cache.json` (point `watchdog.DB_PATH` / `config.CACHE_PATH` at a temp dir). Patch functions on the module that owns them (e.g. `scanning.scan_one`, `config.tinyfish_client`, `config.gemini_client`, `geo.geocode_address`), never on `main`.
 
 # Demo Day Checklist (judging)
-1. On good Wi-Fi beforehand: `POST /api/scan` with `{}` until `backend/fallback_cache.json` holds all 5 London clinics (each run keeps the clinics that worked, so repeat it if some timed out). Check with `POST /api/scan {"use_cache": true}`. Commit it.
+1. On good Wi-Fi beforehand: run a search with "Re-check every clinic" on (or `POST /api/clinics/seed` for more clinics) so the clinic database is fresh; to update the committed seed, re-run the seeding script (see `backend/seed_clinics.json` "note"). `backend/fallback_cache.json` (5 London clinics) is only the last-resort backup now.
 2. Start the backend, open `/health`, and check the startup log says both API keys are `set`.
 3. If Wi-Fi is shaky, run scans with `use_cache: true` (instant replay). Distances need network for the postal code lookup; map pins work offline once the cache has `lat`/`lng`.
 4. Watchdog demo: `POST /api/watch` a clinic as `closed` before going on stage, then trigger `POST /api/watch/simulate-opening` live for the opening alert.

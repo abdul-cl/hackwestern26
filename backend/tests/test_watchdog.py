@@ -3,6 +3,9 @@ from pathlib import Path
 
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
+import os as _os, tempfile as _tempfile
+_os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
+_os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
 import app.main as m
 from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
@@ -26,7 +29,7 @@ def check(name, cond, extra=""):
         fails.append(name)
 
 
-check("DB path is backend/clinics.db", REAL_DB.name == "clinics.db" and REAL_DB.parent.name == "backend", str(REAL_DB))
+check("DB path is clinics.db in DATA_DIR (default backend/)", REAL_DB.name == "clinics.db" and str(REAL_DB.parent) == os.environ["DATA_DIR"], str(REAL_DB))
 
 # --- simulate with no watches
 r = c.post("/api/watch/simulate-opening")

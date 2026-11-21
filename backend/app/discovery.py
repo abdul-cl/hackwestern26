@@ -39,7 +39,8 @@ def gemini_pick(city: str, candidates: list[dict], limit: int) -> list[str]:
         "Exclude other cities, hospitals, walk-in-only clinics, specialists, pharmacies and directories. "
         "Return the exact url values from the list, best first."
     )
-    resp = config.gemini_client().models.generate_content(
+    client = config.gemini_client()  # keep a reference: a temporary client can be closed mid-request
+    resp = client.models.generate_content(
         model=config.GEMINI_MODEL, contents=prompt,
         config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=models.UrlPicks),
     )
