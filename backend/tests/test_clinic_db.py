@@ -102,7 +102,7 @@ check("fresh right after a check", clinic_db.is_fresh(clinic_db.get("https://a.c
 check("unchecked is never fresh", not clinic_db.is_fresh({"status": None, "last_checked": None}, 12))
 to = clinic_db.to_clinic(clinic_db.get("https://a.ca/page"))
 check("to_clinic has API shape + last_checked/checked_via", set(to) == {"name", "url", "status", "evidence_quote", "waitlist_url", "raw_notes",
-      "address", "lat", "lng", "distance_km", "last_checked", "checked_via"}, str(to))
+      "address", "lat", "lng", "distance_km", "last_checked", "checked_via", "expired", "status_age_days"}, str(to))
 
 # ---------- nearby ----------
 for i, (lat, status) in enumerate([(43.10, "accepting"), (43.01, "closed"), (None, "waitlist")]):

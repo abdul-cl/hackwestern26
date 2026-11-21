@@ -28,6 +28,7 @@ Deploy the API first, because the website needs its URL.
    | `DATA_DIR` | `/data` (see the volume step below) |
    | `REFRESH_INTERVAL_MIN` | `180` (re-check out-of-date clinics every 3 hours; `0` = off) |
    | `REFRESH_ALLOW_AGENT` | `0` to keep the background job to quick page reads only (no TinyFish agent credits) |
+   | `MAX_STATUS_AGE_DAYS` | optional, default `7`: older availability shows as "Needs a re-check" |
 
 4. **Add a volume** so the clinic database survives redeploys: right-click the service (or the canvas) → **Volume** → attach it to the service with mount path **`/data`** (matches `DATA_DIR`). On first start the database is filled from `backend/seed_clinics.json`.
 5. **Settings** → **Networking** → **Generate Domain**. You get something like `https://carescout-api.up.railway.app`.

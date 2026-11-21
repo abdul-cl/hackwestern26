@@ -114,6 +114,7 @@ export default function AgentFeed({ state, onStop, onReset }) {
       {summary && (summary.from_database != null || summary.rechecked != null) && (
         <p className="mt-2 text-xs text-slate-500">
           {summary.from_database ?? 0} from the CareScout database, {summary.rechecked ?? 0} checked live, in {summary.duration_s}s.
+          {summary.expired_count ? ` ${summary.expired_count} saved result${summary.expired_count === 1 ? " is" : "s are"} older than a week and marked "Needs a re-check".` : ""}
         </p>
       )}
     </section>

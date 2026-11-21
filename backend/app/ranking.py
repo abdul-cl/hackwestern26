@@ -48,7 +48,10 @@ def rank(req: models.RankRequest):
         "to find a clinic. "
         "If a clinic's raw_notes starts with 'scan failed' or 'scan error', its website could not be checked: "
         "give it score 10, say in reason that its status could not be checked, and make next_step visiting its website "
-        "or calling; never claim it is closed."
+        "or calling; never claim it is closed. "
+        "If a clinic has expired: true, its status was last confirmed status_age_days days ago and may have changed: "
+        "give it at most 40, say in reason when it was last confirmed and that it needs a re-check, make next_step "
+        "checking the clinic's website or calling, and never present that status as current."
     )
     client = config.gemini_client()  # raises a JSON 500 if the key is missing
     try:

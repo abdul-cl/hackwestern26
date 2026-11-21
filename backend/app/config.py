@@ -23,7 +23,8 @@ MAX_AGENTS = max(1, int(os.getenv("TINYFISH_MAX_AGENTS", "2")))  # TinyFish plan
 
 # Security settings (all optional; defaults are safe for local dev)
 API_KEY = os.getenv("CARESCOUT_API_KEY", "").strip()  # if set, every /api/* call needs header X-API-Key: <value>
-EXTRA_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]  # e.g. deployed frontend URL
+# e.g. deployed frontend URL. Forgiving about quotes, spaces and a trailing "/" (the browser sends the origin without one).
+EXTRA_ORIGINS = [o for o in (p.strip().strip("\"'").strip().rstrip("/") for p in os.getenv("ALLOWED_ORIGINS", "").split(",")) if o]
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "").strip().lower() in ("1", "true", "yes")
 ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://carescout-.*\.vercel\.app (preview deploys)
 
@@ -80,6 +81,11 @@ DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
 SEED_PATH = BACKEND_DIR / "seed_clinics.json"  # clinics loaded into an empty database on startup
 SEED_ON_START = os.getenv("CARESCOUT_SEED", "1").strip().lower() not in ("0", "false", "no")
 FRESH_HOURS = float(os.getenv("FRESH_HOURS", "12"))  # a clinic checked within this many hours isn't re-checked in "auto" mode
+# Availability older than this is "expired": shown as "Needs a re-check" (with the last-seen status), never as current.
+MAX_STATUS_AGE_DAYS = float(os.getenv("MAX_STATUS_AGE_DAYS", "7"))
+# A clinic whose website has failed every check for this many days (and at least DEAD_MIN_FAILS times) is hidden from searches.
+DEAD_AFTER_DAYS = float(os.getenv("DEAD_AFTER_DAYS", "30"))
+DEAD_MIN_FAILS = int(os.getenv("DEAD_MIN_FAILS", "3"))
 REFRESH_INTERVAL_MIN = float(os.getenv("REFRESH_INTERVAL_MIN", "0") or 0)  # background re-check of stale clinics; 0 = off
 REFRESH_BATCH = int(os.getenv("REFRESH_BATCH", "20"))  # clinics per background run
 REFRESH_ALLOW_AGENT = os.getenv("REFRESH_ALLOW_AGENT", "1").strip().lower() not in ("0", "false", "no")  # browser-agent fallback

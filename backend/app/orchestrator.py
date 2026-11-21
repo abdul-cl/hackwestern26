@@ -190,7 +190,7 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                 yield common.sse({"type": "stage", "stage": "watch", "message": "Watchdog enrolling full clinics for opening alerts..."})
                 try:
                     for c in clinics:
-                        if c["status"] == "closed" and not common.is_failed(c):  # a failed scan isn't really "closed"
+                        if c["status"] == "closed" and not common.is_failed(c) and not c.get("expired"):  # only confirmed "closed"
                             watched.append(watchdog.add_watch(c["name"], c["url"], "closed", req.user_email.strip()))
                 except Exception as e:
                     yield common.sse({"type": "error", "stage": "watch", "message": f"Watchdog enroll failed: {e}"})
@@ -204,17 +204,18 @@ async def mission_stream(req: models.MissionRequest, request: Request):
             for t in [*tasks, user_task]:
                 if not t.done():
                     t.cancel()
-        ok = [c for c in clinics if not common.is_failed(c)]
+        ok = [c for c in clinics if not common.is_failed(c) and not c.get("expired")]  # expired = last-seen, not current
         yield common.sse({"type": "done", "summary": {
             "total_scanned": len(clinics),
             "accepting_count": sum(c["status"] == "accepting" for c in ok),
             "waitlist_count": sum(c["status"] == "waitlist" for c in ok),
             "closed_count": sum(c["status"] == "closed" for c in ok),
-            "failed_count": len(clinics) - len(ok),
+            "failed_count": sum(common.is_failed(c) for c in clinics),
             "watched_count": len(watched),
             "ranked": bool(ranked),
             "top_clinic": ranked[0]["name"] if ranked else None,
             "duration_s": round(time.monotonic() - started_at, 1),
+            "expired_count": sum(bool(c.get("expired")) and not common.is_failed(c) for c in clinics),
             "from_database": counts["from_database"],
             "rechecked": counts["rechecked"],
         }})
