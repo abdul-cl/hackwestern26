@@ -1,22 +1,34 @@
 # Project Overview
-- **Goal:** [1-sentence description of what our app does]
-- **Demo Flow:** [Step 1 user clicks X -> Step 2 backend does Y -> Step 3 screen shows Z]
+- **Name:** CareScout — Autonomous Family Doctor & Clinic Hunter for Ontario
+- **Goal:** An AI employee that hunts across real, public clinic websites in London, Ontario to find family doctors accepting new patients, ranks them by patient preferences, auto-fills public waitlist/intake forms (stopping before final Submit for human-in-the-loop safety), and watches full clinics for status changes.
+- **Target Prizes:** Hire Your First AI Employee (TinyFish), Best Health Hack (Sun Life), Best Use of Gemini API, Best Use of Entire.
 
-# Folder Ownership (Strict)
-- `frontend/`: Owned by Ayush. UI, styling, and client fetch calls.
-- `backend/`: Owned by Abdul. Python FastAPI server, APIs, and core logic.
-  - Do not modify files in the other person's folder without asking.
+# Tech Stack & Folder Ownership (Strict)
+- `backend/` — Owned by Abdul. Python FastAPI + Uvicorn (port 8000), TinyFish Python SDK (`tinyfish`) for live browsing/form-filling/monitoring, Google Gemini API (`google-genai`) for parsing & ranking clinic policies.
+- `frontend/` — Owned by Ayush. React / Next.js / Vite dashboard with clean healthcare UI, patient profile form, live streaming agent activity feed, clinic status cards (Accepting / Waitlist Open / Not Accepting), and an Auto-Fill Waitlist preview modal.
+- **Strict rule:** Neither person's Claude session edits files inside the other person's folder without asking.
 
 # Commands
 - Backend run: `cd backend && uvicorn app.main:app --reload --port 8000`
 - Frontend run: `cd frontend && npm run dev`
 
 # API Contract (Source of Truth)
-- `POST /api/run`
-    - Request JSON: `{ "input": "string" }`
-    - Response JSON: `{ "output": "string" }`
+- `POST /api/scan`
+    - Request: `{ "city": "London, ON", "preferences": ["string"], "clinic_urls": ["string"] }`
+    - Response (streamed or JSON):
+      `{ "clinics": [{ "name": "string", "url": "string", "status": "accepting | waitlist | closed", "evidence_quote": "string", "waitlist_url": "string | null", "raw_notes": "string" }] }`
+- `POST /api/rank`
+    - Request: `{ "preferences": ["string"], "clinics": [...] }`
+    - Response:
+      `{ "ranked_clinics": [{ "name": "string", "score": 0, "reason": "string", "requirements": ["string"], "next_step": "string" }] }`
+- `POST /api/apply`
+    - Request: `{ "waitlist_url": "string", "patient_info": { "name": "string", "email": "string", "phone": "string", "postal_code": "string" } }`
+    - Response:
+      `{ "status": "ready_for_review", "filled_fields": {}, "summary": "string", "screenshot_url": "string | null" }`
 
 # Rules for Claude
-- Keep code simple, flat, and easy to debug during a hackathon.
-- Never read, print, or commit `.env` files.
-- After editing code, run the relevant build or health check to verify there are no errors.
+- Keep code flat, simple, and easy to debug.
+- Never read, print, or commit `.env` files. Keep all API keys (`TINYFISH_API_KEY`, `GEMINI_API_KEY`) in `.env` and list dummy keys in `.env.example`.
+- **Human-in-the-loop guardrail:** `/api/apply` must fill form fields and STOP before clicking the final Submit button.
+- Include a `backend/fallback_cache.json` option as a guaranteed backup if venue Wi-Fi drops during judging.
+- After editing code, run the relevant health check or build command to verify zero errors.
