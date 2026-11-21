@@ -32,13 +32,14 @@ function headers(json = true) {
 
 async function errorFrom(res) {
   // Backend errors are always JSON { detail: string } (422 details can be a list of field errors).
-  let detail = `${res.status} ${res.statusText}`;
+  // Anything else means we reached some other server (e.g. the website itself because VITE_API_URL is wrong).
+  let detail = `The CareScout API at ${API_BASE_URL} didn't answer properly (HTTP ${res.status}). Check the VITE_API_URL setting.`;
   try {
     const body = await res.json();
     if (typeof body.detail === "string") detail = body.detail;
     else if (Array.isArray(body.detail)) detail = body.detail.map((d) => `${(d.loc || []).slice(1).join(".")}: ${d.msg}`).join("; ");
   } catch {
-    /* not JSON */
+    /* not JSON: keep the explanation above */
   }
   return new ApiError(detail, res.status);
 }
