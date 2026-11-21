@@ -176,13 +176,13 @@ check("off: no rate limit", all(c.post("/api/rank", json={"clinics": []}).status
 code = (
     "import sys; sys.path.insert(0, r'%s'); import app.main as m; from fastapi.testclient import TestClient; c = TestClient(m.app);"
     "f = lambda o: c.options('/api/rank', headers={'Origin': o, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-admin-key'});"
-    "a = f('https://carescout-git-main-abdul.vercel.app'); b = f('https://evil.vercel.app'); l = f('http://localhost:5173');"
+    "a = f('https://1a2b3c4d-carescout.abdul.workers.dev'); b = f('https://evil.workers.dev'); l = f('http://localhost:5173');"
     "print(a.headers.get('access-control-allow-origin'), b.headers.get('access-control-allow-origin'), l.headers.get('access-control-allow-origin'), 'x-admin-key' in a.headers.get('access-control-allow-headers','').lower())"
 ) % BACKEND
-env = {**os.environ, "ALLOWED_ORIGIN_REGEX": r"https://carescout-[a-z0-9-]+\.vercel\.app"}
+env = {**os.environ, "ALLOWED_ORIGIN_REGEX": r"https://([a-z0-9-]+-)?carescout\.abdul\.workers\.dev"}
 out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True).stdout.strip().splitlines()[-1]
-check("CORS regex allows matching Vercel URLs only, localhost still works, X-Admin-Key allowed",
-      out == "https://carescout-git-main-abdul.vercel.app None http://localhost:5173 True", out)
+check("CORS regex allows matching Cloudflare preview URLs only, localhost still works, X-Admin-Key allowed",
+      out == "https://1a2b3c4d-carescout.abdul.workers.dev None http://localhost:5173 True", out)
 
 ranking.rank = real_rank
 check("real fallback_cache.json untouched", REAL_CACHE.read_bytes() == real_before)

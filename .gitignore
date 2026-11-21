@@ -4,3 +4,6 @@ __pycache__/
 node_modules/
 
 backend/clinics.db
+
+# Your editor's personal window/layout state (the other .idea files are shared project settings)
+.idea/workspace.xml

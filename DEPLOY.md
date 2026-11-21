@@ -76,9 +76,9 @@ Cloudflare → the `carescout` Worker → **Settings** → **Domains & Routes** 
 must be on your Cloudflare account; you can buy one in Cloudflare). Then add `https://your-domain.com` to the API's
 `ALLOWED_ORIGINS`.
 
-### Moving off Vercel
-Once the Cloudflare site works and `ALLOWED_ORIGINS` has its address, delete the Vercel project (or leave it; it no
-longer gets new code once you stop using it). `frontend/vercel.json` only matters to Vercel and can be removed then.
+### The old Vercel site
+The website used to be on Vercel. Delete that project in Vercel (Project -> Settings -> General -> Delete Project) and
+remove its address from Railway's `ALLOWED_ORIGINS` / `ALLOWED_ORIGIN_REGEX`.
 
 ## 3. Check it works
 - Open the site → **Watch a demo search**: five London clinics, ranked, in a few seconds.

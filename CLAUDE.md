@@ -12,7 +12,7 @@
 # Commands
 - Backend run: `cd backend && uvicorn app.main:app --reload --port 8000`
 - Backend tests (no network, no API credits, ~1 min): `python backend/tests/run_all.py`
-- Deploy: see `DEPLOY.md` (website on **Cloudflare Workers** static assets from `frontend/`, built from GitHub on every push; API on Railway/Render from `backend/`; config in `frontend/wrangler.jsonc` + `frontend/.node-version`, `backend/railway.json`, `backend/Procfile`, `backend/.python-version`, `render.yaml`). Local check of the Cloudflare build: `cd frontend && npm run cf:preview` (http://localhost:8787). `frontend/vercel.json` is only for the old Vercel deployment.
+- Deploy: see `DEPLOY.md` (website on **Cloudflare Workers** static assets from `frontend/`, built from GitHub on every push; API on Railway/Render from `backend/`; config in `frontend/wrangler.jsonc` + `frontend/.node-version`, `backend/railway.json`, `backend/Procfile`, `backend/.python-version`, `render.yaml`). Local check of the Cloudflare build: `cd frontend && npm run cf:preview` (http://localhost:8787).
 - Frontend run: `cd frontend && npm install && npm run dev` (http://localhost:5173; needs Node.js LTS). Build check: `cd frontend && npm run build`.
 - Frontend backend URL: `frontend/src/config.js` (default `http://localhost:8000`), or override with `frontend/.env.local` → `VITE_API_URL=...` (and `VITE_API_KEY=...` if backend auth is on).
 
