@@ -6,12 +6,15 @@
 # Tech Stack & Folder Ownership (Strict)
 - `backend/` — Owned by Abdul. Python FastAPI + Uvicorn (port 8000), TinyFish Python SDK (`tinyfish`) for live browsing/form-filling/monitoring, Google Gemini API (`google-genai`) for parsing & ranking clinic policies.
 - `frontend/` — Owned by Ayush. React / Next.js / Vite dashboard with clean healthcare UI, patient profile form, live streaming agent activity feed, clinic status cards (Accepting / Waitlist Open / Not Accepting), and an Auto-Fill Waitlist preview modal.
+- `frontend/` is now the **website** (React + Vite + Tailwind), built in Abdul's sessions with Ayush's OK; Ayush is building the mobile app variant separately.
 - **Strict rule:** Neither person's Claude session edits files inside the other person's folder without asking.
 
 # Commands
 - Backend run: `cd backend && uvicorn app.main:app --reload --port 8000`
 - Backend tests (no network, no API credits, ~1 min): `python backend/tests/run_all.py`
-- Frontend run: `cd frontend && npm run dev`
+- Deploy: see `DEPLOY.md` (website on Vercel from `frontend/`, API on Railway/Render from `backend/`; config in `frontend/vercel.json`, `backend/railway.json`, `backend/Procfile`, `backend/.python-version`, `render.yaml`).
+- Frontend run: `cd frontend && npm install && npm run dev` (http://localhost:5173; needs Node.js LTS). Build check: `cd frontend && npm run build`.
+- Frontend backend URL: `frontend/src/config.js` (default `http://localhost:8000`), or override with `frontend/.env.local` → `VITE_API_URL=...` (and `VITE_API_KEY=...` if backend auth is on).
 
 # Backend File Map (`backend/app/`)
 Each feature is its own module with its own `router`; `main.py` only wires them together. Modules call each other as `module.name` (e.g. `scanning.scan_one`, `config.SCAN_TIMEOUT`), so tests patch the owning module.
@@ -41,7 +44,10 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `WATCHDOG_INTERVAL_MIN` (default `0` = off) — background re-check of all watched clinics every N minutes; alerts go to `GET /api/watch/alerts`.
     - `TINYFISH_MAX_AGENTS` (default `2`, our TinyFish plan's limit) — how many TinyFish agents run at once across scan, stream, apply and watch checks. Extra work waits in a queue; per-clinic timeouts only start once its agent starts.
     - `SCAN_TIMEOUT_S` (default 180) / `APPLY_TIMEOUT_S` (default 120) / `VERIFY_TIMEOUT_S` (default 45) — per-agent time limits.
-    - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network.
+    - `PUBLIC_DEMO=1` — public deployment mode: visitors only get saved results (scan / stream / mission are forced to `use_cache`; `503` if `fallback_cache.json` is missing), `/api/apply`, `/api/verify-doctor`, `/api/discover`, `/api/watch/check` return `403`, and POSTs are rate-limited per visitor (`PUBLIC_RATE_LIMIT`, default 30 per 10 min, `429`). Requests with header `X-Admin-Key: <CARESCOUT_ADMIN_KEY>` skip all of this.
+    - `CARESCOUT_ADMIN_KEY` — server-side secret that unlocks live agents in public mode (website: `localStorage.carescout_admin_key`, see DEPLOY.md). Never put it in a `VITE_` variable.
+    - `ALLOWED_ORIGIN_REGEX` — extra CORS pattern, e.g. Vercel preview URLs `https://carescout-[a-z0-9-]+\.vercel\.app`.
+    - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network (hosts like Railway/Render need it; their start command sets it).
 - **Size limits:** `clinic_urls` ≤ 20 after dedup, `clinics` (rank) ≤ 30, `preferences` ≤ 20, `city` ≤ 100 chars, patient fields capped (name 120, email 200, phone 40, postal_code 12).
 - `POST /api/scan`
     - Request: `{ "city": "London, ON", "preferences": ["string"], "clinic_urls": ["string"], "use_cache": false, "user_postal_code": "N6A 3K7" }` (`city` is used as a geocoding fallback; `preferences` is accepted but not used yet; `clinic_urls` empty = the 5 London defaults, max 20; `use_cache` defaults to `false`; `user_postal_code` is optional, default `null`)
@@ -130,7 +136,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
 - `POST /api/watch/check?user_email=you@example.com` ("Check Watchlist Now" button; no body)
     - Re-scans watched clinics in parallel with TinyFish (only that user's if `user_email` is given; slow: about as long as `/api/scan`). Saves new statuses and stamps `last_checked`.
     - Response: `{ "checked": 3, "failed": 0, "alerts": [ <alert>, ... ] }`. `alerts` only has clinics whose status changed (e.g. `closed` -> `accepting`). `failed` counts clinics whose scan errored; their status and `last_checked` are left unchanged.
-    - Alert: `{ "id": 1, "clinic_name": "string", "url": "string", "user_email": "string", "old_status": "string", "new_status": "string", "evidence_quote": "string", "message": "string" }`. `user_email` is masked when `user_email` is omitted. `message` is ready to show, e.g. `"Good news: X accepting new patients (was closed). Act fast, spots fill quickly."`
+    - Alert: `{ "id": 1, "clinic_name": "string", "url": "string", "user_email": "string", "old_status": "string", "new_status": "string", "evidence_quote": "string", "message": "string" }`. `user_email` is masked when `user_email` is omitted. `message` is ready to show, e.g. `"Good news: X is now accepting new patients (was closed). Act fast, spots fill quickly."`
 - `POST /api/watch/simulate-opening` (**demo only**, for judging on stage)
     - Request (body optional): `{ "watch_id": 1 }` or `{}` / no body = the most recently added watch.
     - Flips that watch to `accepting` in SQLite (and stamps `last_checked`) and returns `{ "alert": <alert> + "simulated": true }`, the same alert shape as `/api/watch/check`, with `user_email` always masked. If the clinic was already `accepting`, `old_status` is reported as `closed` so the demo can be repeated.
@@ -143,11 +149,21 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - Response: `{ "deleted": true, "id": 3 }`. `404` if that watch doesn't exist or belongs to another email; `422` without `user_email`. Past alerts for it are kept.
 - **Background auto-check (optional):** set `WATCHDOG_INTERVAL_MIN` in the backend `.env` (e.g. `30`) and the server re-checks every watched clinic on that timer by itself, storing any alerts in the feed above. Off by default (each check uses one TinyFish agent per watched clinic).
 
+# Website File Map (`frontend/src/`)
+- Pages (React Router, all inside `components/Layout.jsx` = nav + alert banner + footer): `/` `pages/HomePage.jsx` (landing page), `/find` `pages/FindPage.jsx` (search + results; `/find?demo=1` turns on Demo mode and launches), `/watchdog` `pages/WatchdogPage.jsx`, `/how-it-works` `pages/HowItWorksPage.jsx` (agents, results, `#safety`, FAQ), `*` `pages/NotFoundPage.jsx`.
+- `state/AppState.jsx` — state shared across pages: search form, the running mission (keeps going while you browse), alert banner, Watchdog count. Use `useAppState()`.
+- `config.js` — backend URL/key, form defaults, dropdown options. `api.js` — every backend call + the SSE stream reader (`streamPost`).
+- `hooks/useMission.js` — runs `POST /api/mission/stream` and turns its events into UI state; `stop()` aborts. `hooks/useReducedMotion.js` — respect the OS "reduce motion" setting.
+- `lib/clinics.js` — pure helpers: failed-scan detection, status colors/labels, merging scan + rank results by `url`.
+- `components/`: `SiteNav`, `SiteFooter`, `Layout`, `Logo`, `MissionForm`, `AgentFeed`, `ClinicMap`, `ClinicCard`, `ApplyModal`, `CallScript`, `VerifyDoctor`, `WatchdogView`, `AlertBanner`, `StatusBadge`, `ErrorBoundary`.
+- `components/home/`: `HuntBoard` (hero animation, fictional example clinics), `FeatureDemos` (form-fill, multilingual call script, opening alert, CPSO examples). Home-page examples use made-up clinics and people on purpose; never put invented statuses next to real clinic names.
+- Design tokens (`tailwind.config.js`, `index.css`): pine primary (`pine-*`, and `emerald-*` is remapped to it), `ink` #10231F text, `paper` #F7F9F8 background, `mint` #D5EEE4 accent; fonts Bricolage Grotesque (`font-display`, headings) + Instrument Sans (body). Motion: one orchestrated hero sequence; everything else only moves in response to a click. Reduced motion is respected globally.
+
 # Frontend Integration Notes (for Ayush / frontend Claude sessions)
 Read this before writing any code that calls the backend. The API Contract above is the source of truth; this section is how to use it. Don't edit `backend/` — ask Abdul if something is missing.
 
 ## Setup
-- Backend base URL: `http://localhost:8000` (put it in an env var, e.g. `VITE_API_URL` / `NEXT_PUBLIC_API_URL`). Check it's up with `GET /health` → `{ "status": "ok" }`.
+- Backend base URL: `http://localhost:8000` (put it in an env var, e.g. `VITE_API_URL` / `NEXT_PUBLIC_API_URL`). Check it's up with `GET /health` → `{ "status": "ok", "public_demo": false }`. When `public_demo` is true the site is a public deployment: only saved results, and the website disables Auto-Fill / Verify Doctor / Check All Now with an explanation.
 - Run the frontend on `localhost` or `127.0.0.1` (any port). Other origins are blocked by CORS unless Abdul adds them to `ALLOWED_ORIGINS`.
 - Auth is OFF by default. If Abdul turns it on, send header `X-API-Key: <value>` on every `/api/*` call (read it from an env var, never hard-code it).
 - Interactive API docs (try every endpoint): `http://localhost:8000/docs`.

@@ -25,6 +25,24 @@ MAX_AGENTS = max(1, int(os.getenv("TINYFISH_MAX_AGENTS", "2")))  # TinyFish plan
 API_KEY = os.getenv("CARESCOUT_API_KEY", "").strip()  # if set, every /api/* call needs header X-API-Key: <value>
 EXTRA_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]  # e.g. deployed frontend URL
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "").strip().lower() in ("1", "true", "yes")
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://carescout-.*\.vercel\.app (preview deploys)
+
+# Public deployment: visitors only get saved (cached) results, so strangers can't spend TinyFish/Gemini credits.
+PUBLIC_DEMO = os.getenv("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")
+ADMIN_KEY = os.getenv("CARESCOUT_ADMIN_KEY", "").strip()  # server-side secret: header X-Admin-Key unlocks live agents
+PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT", "30"))  # requests per visitor per 10 minutes (public mode)
+
+
+def is_admin(request) -> bool:
+    """True when the request carries the server's admin key (never put this key in the frontend)."""
+    import secrets
+    key = request.headers.get("x-admin-key", "")
+    return bool(ADMIN_KEY) and bool(key) and secrets.compare_digest(key, ADMIN_KEY)
+
+
+def public_restricted(request) -> bool:
+    """True when this request must stay in demo mode (public deployment and no admin key)."""
+    return PUBLIC_DEMO and not is_admin(request)
 DEFAULT_CLINIC_URLS = [
     "https://www.ldam.ca/find-a-doctor",
     "https://thamesvalleyfht.ca/become-a-patient/",
