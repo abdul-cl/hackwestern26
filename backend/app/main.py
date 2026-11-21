@@ -143,7 +143,7 @@ app.add_middleware(CatchAllMiddleware)  # added first = inner, so CORS headers s
 app.add_middleware(
     CORSMiddleware,
     # Only local frontends (any port on localhost / 127.0.0.1), anything listed in ALLOWED_ORIGINS, and anything
-    # matching ALLOWED_ORIGIN_REGEX (e.g. Vercel preview URLs). A random website can't call the API.
+    # matching ALLOWED_ORIGIN_REGEX (e.g. Cloudflare preview builds). A random website can't call the API.
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?" + (f"|{config.ALLOWED_ORIGIN_REGEX}" if config.ALLOWED_ORIGIN_REGEX else ""),
     allow_origins=config.EXTRA_ORIGINS,
     allow_credentials=False,

@@ -30,7 +30,7 @@ API_KEY = os.getenv("CARESCOUT_API_KEY", "").strip()  # if set, every /api/* cal
 # e.g. deployed frontend URL. Forgiving about quotes, spaces and a trailing "/" (the browser sends the origin without one).
 EXTRA_ORIGINS = [o for o in (p.strip().strip("\"'").strip().rstrip("/") for p in os.getenv("ALLOWED_ORIGINS", "").split(",")) if o]
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "").strip().lower() in ("1", "true", "yes")
-ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://carescout-.*\.vercel\.app (preview deploys)
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://([a-z0-9-]+-)?carescout\.you\.workers\.dev (preview builds)
 
 # Public deployment: visitors only get saved (cached) results, so strangers can't spend TinyFish/Gemini credits.
 PUBLIC_DEMO = os.getenv("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")

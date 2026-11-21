@@ -107,10 +107,10 @@ check("apply normal still ready_for_review", j["status"] == "ready_for_review", 
 code = (
     "import sys; sys.path.insert(0, r'%s'); import app.main as m; from fastapi.testclient import TestClient; c=TestClient(m.app);"
     "print(c.get('/docs').status_code, c.get('/openapi.json').status_code, c.get('/health').status_code,"
-    "c.options('/api/scan', headers={'Origin':'https://carescout.vercel.app','Access-Control-Request-Method':'POST'}).headers.get('access-control-allow-origin'))" % BACKEND
+    "c.options('/api/scan', headers={'Origin':'https://carescout.abdul.workers.dev','Access-Control-Request-Method':'POST'}).headers.get('access-control-allow-origin'))" % BACKEND
 )
-env = {**os.environ, "DISABLE_DOCS": "1", "ALLOWED_ORIGINS": "https://carescout.vercel.app"}
+env = {**os.environ, "DISABLE_DOCS": "1", "ALLOWED_ORIGINS": "https://carescout.abdul.workers.dev"}
 out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True).stdout.strip().splitlines()[-1]
-check("DISABLE_DOCS hides docs, ALLOWED_ORIGINS adds origin", out == "404 404 200 https://carescout.vercel.app", out)
+check("DISABLE_DOCS hides docs, ALLOWED_ORIGINS adds origin", out == "404 404 200 https://carescout.abdul.workers.dev", out)
 
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))
