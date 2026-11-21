@@ -12,7 +12,9 @@ Deploy the API first, because the website needs its URL.
 ## 1. API on Railway
 
 1. railway.com → **New Project** → **Deploy from GitHub repo** → pick this repo.
-2. Open the service → **Settings** → **Root Directory** → `backend`. Railway reads `backend/railway.json` (build/start/health check) and `backend/.python-version` (Python 3.13).
+2. Click the service box → **Settings** → **Root Directory** → `/backend`. Railway's builder reads `backend/railpack.json` (start command) and `backend/.python-version` (Python 3.13).
+   - If the build log says **No start command detected**: Settings → **Deploy** → **Custom Start Command** → `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, then redeploy.
+   - Optional: Settings → **Config-as-code** → Railway config file `/backend/railway.json` (adds the `/health` health check). Railway reads this path from the repo root, not the Root Directory.
 3. **Variables** tab → add:
 
    | Variable | Value |
