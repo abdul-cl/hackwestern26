@@ -6,14 +6,15 @@ from types import SimpleNamespace as NS
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 import app.main as m
+from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
 from fastapi.testclient import TestClient
 
 tmp = Path(tempfile.mkdtemp())
-m.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
+config.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
 os.environ["TINYFISH_API_KEY"] = "fake"
 os.environ["GEMINI_API_KEY"] = "fake"
-m.MAX_AGENTS = 2
+config.MAX_AGENTS = 2
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()  # one event loop, like uvicorn
 fails = []
 
@@ -41,11 +42,11 @@ def fake_scan_one(url, seconds=0.5):
             running -= 1
 
 
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 urls = [f"https://c{i}.ca" for i in range(4)]
 
 # --- at most MAX_AGENTS run at once; queued clinics are not timed out
-m.SCAN_TIMEOUT = 0.8  # shorter than the total queue time (4 x 0.5s / 2 = 1.0s) but longer than one run
+config.SCAN_TIMEOUT = 0.8  # shorter than the total queue time (4 x 0.5s / 2 = 1.0s) but longer than one run
 t = time.time()
 r = c.post("/api/scan", json={"clinic_urls": urls})
 dt = time.time() - t
@@ -56,11 +57,11 @@ check("queue time doesn't count toward timeout", all(x["raw_notes"] == "ok" for 
 
 # --- a timed-out agent keeps its slot until its thread really finishes
 peak = 0
-m.SCAN_TIMEOUT = 0.5
+config.SCAN_TIMEOUT = 0.5
 t = time.time()
 r = c.post("/api/scan", json={"clinic_urls": ["https://slow1.ca", "https://slow2.ca"]})
 check("slow scans time out", all("timed out" in x["raw_notes"] for x in r.json()["clinics"]), r.text)
-m.SCAN_TIMEOUT = 5
+config.SCAN_TIMEOUT = 5
 t = time.time()
 r = c.post("/api/scan", json={"clinic_urls": ["https://after.ca"]})
 waited = time.time() - t
@@ -82,13 +83,13 @@ check("per-clinic order: queued -> started -> result", ok, str(ev))
 check("stream: never more than 2 agents at once", peak == 2, str(peak))
 
 # --- apply also uses the agent limit and its timeout excludes queue time
-m.APPLY_TIMEOUT = 0.8
+config.APPLY_TIMEOUT = 0.8
 class Run:
     def __init__(self): self.status, self.error = "COMPLETED", None; self.result = {"filled": {"Name": "T"}, "summary": "ok", "submitted": False}
 def slow_run(**kw):
     time.sleep(0.5)
     return Run()
-m.tinyfish_client = lambda timeout: NS(agent=NS(run=slow_run))
+config.tinyfish_client = lambda timeout: NS(agent=NS(run=slow_run))
 pi = {"name": "T", "email": "t@x.ca", "phone": "1", "postal_code": "N6A 1A1"}
 import concurrent.futures as cf
 with cf.ThreadPoolExecutor(4) as ex:
@@ -102,7 +103,7 @@ ranked = {"ranked_clinics": [
     {"name": "Renamed By Model", "url": "https://gamma.ca", "score": 40, "reason": "r", "requirements": [], "next_step": "n"},
     {"name": "Invented", "url": "https://invented.ca", "score": 30, "reason": "r", "requirements": [], "next_step": "n"},
 ]}
-m.gemini_client = lambda: NS(models=NS(generate_content=lambda **kw: NS(text=json.dumps(ranked))))
+config.gemini_client = lambda: NS(models=NS(generate_content=lambda **kw: NS(text=json.dumps(ranked))))
 inp = [{"name": "Alpha Clinic", "url": "https://alpha.ca"}, {"name": "Beta Clinic", "url": "https://beta.ca"},
        {"name": "Gamma", "url": "https://gamma.ca"}]
 out = {x["name"]: x["url"] for x in c.post("/api/rank", json={"clinics": inp}).json()["ranked_clinics"]}

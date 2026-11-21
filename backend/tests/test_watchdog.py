@@ -4,6 +4,7 @@ from pathlib import Path
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 import app.main as m
+from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
 from fastapi.testclient import TestClient
 
@@ -11,9 +12,9 @@ REAL_DB = wd.DB_PATH
 real_db_existed = REAL_DB.exists()
 tmp = Path(tempfile.mkdtemp())
 wd.DB_PATH = tmp / "t.db"
-m.CACHE_PATH = tmp / "cache.json"
+config.CACHE_PATH = tmp / "cache.json"
 os.environ["TINYFISH_API_KEY"] = "fake"
-m.MAX_AGENTS = 50  # no agent limit unless a test sets one
+config.MAX_AGENTS = 50  # no agent limit unless a test sets one
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()  # one event loop, like uvicorn
 fails = []
 ISO = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
@@ -66,11 +67,11 @@ calls = []
 def fake_scan_one(u):
     calls.append(u); time.sleep(0.5)
     if "boom" in u:
-        return m.failed_clinic(u, "scan error: blocked")
+        return common.failed_clinic(u, "scan error: blocked")
     status = {"https://alpha.ca": "accepting", "https://beta.ca": "waitlist"}[u]
     return {"name": u, "url": u, "status": status, "evidence_quote": "Now accepting!", "waitlist_url": None, "raw_notes": "ok",
             "address": None, "lat": None, "lng": None, "distance_km": None}
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 t = time.time()
 j = c.post("/api/watch/check").json()
 dt = time.time() - t
@@ -129,7 +130,7 @@ check("persists across restart", out == "4", out)
 
 # --- alert history, unwatch, background auto-check
 wd.DB_PATH = tmp / "alerts.db"
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 c.post("/api/watch", json={"clinic_name": "Alpha Clinic", "url": "https://alpha.ca", "last_status": "closed", "user_email": "alice@gmail.com"})
 c.post("/api/watch", json={"clinic_name": "Beta", "url": "https://beta.ca", "last_status": "closed", "user_email": "bob@uwo.ca"})
 check("no alerts yet", c.get("/api/watch/alerts").json() == {"alerts": []})
@@ -161,16 +162,16 @@ async def fake_check(user_email):
     if len(runs) == 2:
         raise RuntimeError("one bad check")  # the loop must survive this
     return {"checked": 1, "failed": 0, "alerts": []}
-real_check, m.run_watch_check = m.run_watch_check, fake_check
-m.WATCHDOG_INTERVAL_MIN = 0.001  # ~0.06s
+real_check, watch_api.run_watch_check = watch_api.run_watch_check, fake_check
+config.WATCHDOG_INTERVAL_MIN = 0.001  # ~0.06s
 async def run_loop():
     try:
-        await asyncio.wait_for(m.watchdog_loop(), timeout=0.5)
+        await asyncio.wait_for(watch_api.watchdog_loop(), timeout=0.5)
     except asyncio.TimeoutError:
         pass
 asyncio.run(run_loop())
 check("background loop keeps checking, survives an error", len(runs) >= 3 and set(runs) == {None}, str(runs))
-m.run_watch_check = real_check
+watch_api.run_watch_check = real_check
 check("auto-check off by default", float(os.getenv("WATCHDOG_INTERVAL_MIN", "0") or 0) == 0)
 
 check("real backend/clinics.db not created by tests", REAL_DB.exists() == real_db_existed)

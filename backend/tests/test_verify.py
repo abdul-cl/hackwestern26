@@ -6,13 +6,14 @@ from types import SimpleNamespace as NS
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 import app.main as m
+from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
 from fastapi.testclient import TestClient
 
 tmp = Path(tempfile.mkdtemp())
-m.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
+config.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
 os.environ["TINYFISH_API_KEY"] = "fake"
-m.MAX_AGENTS = 50
+config.MAX_AGENTS = 50
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()
 fails = []
 KEYS = {"verified", "cpso_number", "registration_status", "specialty", "languages", "gender", "profile_url", "notes", "lookup_status"}
@@ -38,8 +39,8 @@ def agent_returning(result=None, status="COMPLETED", error=None, sleep=0, exc=No
         if exc:
             raise exc
         return Run(result, status, error)
-    m.tinyfish_client = lambda timeout: NS(agent=NS(run=run))
-    m._verify_cache.clear()
+    config.tinyfish_client = lambda timeout: NS(agent=NS(run=run))
+    cpso._verify_cache.clear()
 
 
 def verify(name="Jane Smith", city="London"):
@@ -89,18 +90,18 @@ agent_returning(exc=RuntimeError("network down"))
 code, j = verify()
 check("exception -> 200 error", code == 200 and "network down" in j["notes"], str(j))
 
-m.VERIFY_TIMEOUT = 0.5
+config.VERIFY_TIMEOUT = 0.5
 agent_returning(FOUND, sleep=2)
 t = time.time()
 code, j = verify()
 check("timeout -> 200 verified false", code == 200 and j["lookup_status"] == "timeout" and j["verified"] is False and time.time() - t < 1.5, str(j))
-m.VERIFY_TIMEOUT = 45
+config.VERIFY_TIMEOUT = 45
 
 check("name too short -> 422", c.post("/api/verify-doctor", json={"doctor_name": "J"}).status_code == 422)
 check("missing name -> 422", c.post("/api/verify-doctor", json={"city": "London"}).status_code == 422)
 check("city defaults to London", c.post("/api/verify-doctor", json={"doctor_name": "Jane Smith"}).status_code == 200)
 os.environ.pop("TINYFISH_API_KEY")
-m._verify_cache.clear()
+cpso._verify_cache.clear()
 code, j = verify()
 check("missing TinyFish key -> JSON 500", code == 500 and "TINYFISH_API_KEY" in j["detail"], str(j))
 

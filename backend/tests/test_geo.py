@@ -4,17 +4,18 @@ from pathlib import Path
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 import app.main as m
+from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.geo as geo
 REAL_GEOCODE_ADDRESS, REAL_GEOCODE_POSTAL = geo.geocode_address, geo.geocode_postal_code
 from fastapi.testclient import TestClient
 
 tmp = Path(tempfile.mkdtemp())
-REAL_CACHE = m.CACHE_PATH
+REAL_CACHE = config.CACHE_PATH
 real_before = REAL_CACHE.read_bytes()
-m.CACHE_PATH = tmp / "cache.json"
-m.watchdog.DB_PATH = tmp / "t.db"
+config.CACHE_PATH = tmp / "cache.json"
+watchdog.DB_PATH = tmp / "t.db"
 os.environ["TINYFISH_API_KEY"] = "fake"
-m.MAX_AGENTS = 50  # no agent limit unless a test sets one
+config.MAX_AGENTS = 50  # no agent limit unless a test sets one
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()  # one event loop, like uvicorn
 fails = []
 
@@ -54,7 +55,7 @@ async def fake_geocode_address(q):
     return LOC.get(q.lower())
 async def fake_geocode_postal(code):
     return {"lat": 43.00711, "lng": -81.27384, "display_name": "N6A 3K7"} if geo.normalize_postal_code(code) else None
-geo.geocode_address, m.geocode_postal_code, geo.geocode_postal_code = fake_geocode_address, fake_geocode_postal, fake_geocode_postal
+geo.geocode_address, geo.geocode_postal_code, geo.geocode_postal_code = fake_geocode_address, fake_geocode_postal, fake_geocode_postal
 
 def clinic(u, name, address=None):
     return {"name": name, "url": u, "status": "accepting", "evidence_quote": "q", "waitlist_url": None,
@@ -66,9 +67,9 @@ SCANS = {
 }
 def fake_scan_one(u):
     if "boom" in u:
-        return m.failed_clinic(u, "scan error: boom")
+        return common.failed_clinic(u, "scan error: boom")
     return dict(SCANS[u])
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 KEYS = {"name", "url", "status", "evidence_quote", "waitlist_url", "raw_notes", "address", "lat", "lng", "distance_km"}
 
 body = {"clinic_urls": ["https://a.ca", "https://b.ca", "https://c.ca", "https://boom.ca"], "user_postal_code": "n6a3k7"}
@@ -96,16 +97,16 @@ geo.geocode_address = raising
 r = c.post("/api/scan", json=body)
 check("geocoder raising -> scan ok, nulls", r.status_code == 200 and all(x["lat"] is None for x in r.json()["clinics"]), r.text)
 async def hanging(q): await asyncio.sleep(30)
-geo.geocode_address, m.LOCATE_TIMEOUT = hanging, 1
+geo.geocode_address, scanning.LOCATE_TIMEOUT = hanging, 1
 t = time.time()
 r = c.post("/api/scan", json=body)
 check("geocoder hanging -> bounded, nulls", r.status_code == 200 and time.time() - t < 5 and all(x["lat"] is None for x in r.json()["clinics"]), str(time.time() - t))
-geo.geocode_address, m.LOCATE_TIMEOUT = fake_geocode_address, 20.0
+geo.geocode_address, scanning.LOCATE_TIMEOUT = fake_geocode_address, 20.0
 async def postal_raise(code): raise RuntimeError("down")
-m.geocode_postal_code = postal_raise
+geo.geocode_postal_code = postal_raise
 r = c.post("/api/scan", json=body)
 check("postal geocoder raising -> lat kept, distance null", r.status_code == 200 and r.json()["clinics"][0]["lat"] is not None and all(x["distance_km"] is None for x in r.json()["clinics"]))
-m.geocode_postal_code = fake_geocode_postal
+geo.geocode_postal_code = fake_geocode_postal
 
 # --- stream
 r = c.post("/api/scan/stream", json=body)
@@ -115,9 +116,9 @@ check("stream: done last, map fields present", ev[-1] == {"type": "done", "total
 check("stream: distance computed", res["https://a.ca"]["distance_km"] == 1.0, str(res["https://a.ca"]))
 
 # --- cache: save strips distance, replay recomputes it
-m.DEFAULT_CLINIC_URLS[:] = ["https://a.ca", "https://b.ca"]
+config.DEFAULT_CLINIC_URLS[:] = ["https://a.ca", "https://b.ca"]
 r = c.post("/api/scan", json={"user_postal_code": "N6A 3K7"})
-saved = json.loads(m.CACHE_PATH.read_text(encoding="utf-8"))["clinics"]
+saved = json.loads(config.CACHE_PATH.read_text(encoding="utf-8"))["clinics"]
 check("cache saved with lat/lng, without distance", saved[0]["lat"] == 43.00937 and all(x["distance_km"] is None for x in saved), str(saved[0]))
 calls.clear()
 r = c.post("/api/scan", json={"use_cache": True, "user_postal_code": "N6A 3K7"})
@@ -126,7 +127,7 @@ r = c.post("/api/scan/stream", json={"use_cache": True, "user_postal_code": "N6A
 ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
 check("stream cache replay adds distance", ev[0]["clinic"]["distance_km"] == 1.0 and ev[-1]["type"] == "done", str(ev))
 old = {k: v for k, v in saved[0].items() if k not in ("address", "lat", "lng", "distance_km")}
-m.CACHE_PATH.write_text(json.dumps({"clinics": [old]}), encoding="utf-8")
+config.CACHE_PATH.write_text(json.dumps({"clinics": [old]}), encoding="utf-8")
 r = c.post("/api/scan", json={"use_cache": True})
 check("old-format cache gets map keys", r.status_code == 200 and set(r.json()["clinics"][0]) == KEYS, r.text)
 

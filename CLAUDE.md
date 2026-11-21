@@ -13,6 +13,25 @@
 - Backend tests (no network, no API credits, ~1 min): `python backend/tests/run_all.py`
 - Frontend run: `cd frontend && npm run dev`
 
+# Backend File Map (`backend/app/`)
+Each feature is its own module with its own `router`; `main.py` only wires them together. Modules call each other as `module.name` (e.g. `scanning.scan_one`, `config.SCAN_TIMEOUT`), so tests patch the owning module.
+- `main.py` — app setup only: auth (`X-API-Key`), CORS, catch-all JSON errors, lifespan (background watchdog), `/health`, `include_router` for every feature.
+- `config.py` — `.env` loading, paths, all settings/timeouts/limits, default London URLs, `require_key`, TinyFish + Gemini client factories.
+- `models.py` — every request/response Pydantic model (with the size caps).
+- `common.py` — shared helpers: URL check, Gemini JSON parsing, SSE formatting + keep-alives, failed-clinic helpers.
+- `cache.py` — `fallback_cache.json` load/merge/save.
+- `agents.py` — TinyFish agent limiter (`TINYFISH_MAX_AGENTS`) + timeouts for all agent calls.
+- `geo.py` — Nominatim geocoding (cache, rate limit, circuit breaker), address clean-up, distance.
+- `scanning.py` — `POST /api/scan`, `POST /api/scan/stream`, scan prompt, geocoding attach.
+- `discovery.py` — `POST /api/discover`.
+- `ranking.py` — `POST /api/rank` (Gemini prompt).
+- `apply_form.py` — `POST /api/apply` (human-in-the-loop form fill).
+- `cpso.py` — `POST /api/verify-doctor`.
+- `orchestrator.py` — `POST /api/mission/stream`.
+- `watch_api.py` — all `/api/watch*` endpoints + background auto-check loop.
+- `watchdog.py` — SQLite storage for watches and alerts (no FastAPI code).
+- New endpoint? Add it to the matching module (or a new module with `router = APIRouter()` + `app.include_router(...)` in `main.py`), its models to `models.py`, settings to `config.py`, and tests to `backend/tests/`.
+
 # API Contract (Source of Truth)
 - **Errors (all endpoints):** failures are always JSON `{ "detail": "string" }`. `401` = missing/wrong `X-API-Key` (only when auth is on), `422` = invalid request body (incl. oversized lists/strings), `500` = missing/placeholder API key (`TINYFISH_API_KEY` / `GEMINI_API_KEY`) or unexpected server error (details only in the backend log), `502` = Gemini failed in `/api/rank`.
 - **Security settings (backend `.env`, all optional):**
@@ -242,7 +261,7 @@ type MissionEvent =
 - Never read, print, or commit `.env` files. Keep all API keys (`TINYFISH_API_KEY`, `GEMINI_API_KEY`) in `.env` and list dummy keys in `.env.example`.
 - **Human-in-the-loop guardrail:** `/api/apply` must fill form fields and STOP before clicking the final Submit button.
 - Include a `backend/fallback_cache.json` option as a guaranteed backup if venue Wi-Fi drops during judging.
-- After editing code, run the relevant health check or build command to verify zero errors. For `backend/`, run `python backend/tests/run_all.py` (all suites must pass) and add/adjust tests in `backend/tests/` for new behavior. Tests must never touch the real `backend/clinics.db` or `backend/fallback_cache.json` (point `watchdog.DB_PATH` / `main.CACHE_PATH` at a temp dir).
+- After editing code, run the relevant health check or build command to verify zero errors. For `backend/`, run `python backend/tests/run_all.py` (all suites must pass) and add/adjust tests in `backend/tests/` for new behavior. Tests must never touch the real `backend/clinics.db` or `backend/fallback_cache.json` (point `watchdog.DB_PATH` / `config.CACHE_PATH` at a temp dir). Patch functions on the module that owns them (e.g. `scanning.scan_one`, `config.tinyfish_client`, `config.gemini_client`, `geo.geocode_address`), never on `main`.
 
 # Demo Day Checklist (judging)
 1. On good Wi-Fi beforehand: `POST /api/scan` with `{}` until `backend/fallback_cache.json` holds all 5 London clinics (each run keeps the clinics that worked, so repeat it if some timed out). Check with `POST /api/scan {"use_cache": true}`. Commit it.

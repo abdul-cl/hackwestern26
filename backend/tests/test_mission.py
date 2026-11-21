@@ -7,15 +7,16 @@ from fastapi import HTTPException
 BACKEND = str(Path(__file__).resolve().parents[1])
 sys.path.insert(0, BACKEND)
 import app.main as m
+from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
 from fastapi.testclient import TestClient
 
 tmp = Path(tempfile.mkdtemp())
-REAL_CACHE = m.CACHE_PATH
+REAL_CACHE = config.CACHE_PATH
 real_before = REAL_CACHE.read_bytes()
-m.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
+config.CACHE_PATH, wd.DB_PATH = tmp / "cache.json", tmp / "t.db"
 os.environ["TINYFISH_API_KEY"] = "fake"
-m.MAX_AGENTS = 50
+config.MAX_AGENTS = 50
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()
 fails = []
 
@@ -29,22 +30,22 @@ def check(name, cond, extra=""):
 STATUS = {"https://open.ca": "accepting", "https://wait.ca": "waitlist", "https://full1.ca": "closed", "https://full2.ca": "closed"}
 def fake_scan_one(url):
     if "boom" in url:
-        return m.failed_clinic(url, "scan error: blocked")
+        return common.failed_clinic(url, "scan error: blocked")
     return {"name": url.split("//")[1].split(".")[0].title() + " Clinic", "url": url, "status": STATUS[url], "evidence_quote": "q",
             "waitlist_url": None, "raw_notes": "ok", "address": None, "lat": None, "lng": None, "distance_km": None}
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 
 
 async def no_geo(*a, **k):  # keep tests offline: no Nominatim calls
     return None
 import app.geo as geo
-geo.geocode_address = geo.geocode_postal_code = m.geocode_postal_code = no_geo
+geo.geocode_address = geo.geocode_postal_code = geo.geocode_postal_code = no_geo
 
 discover_calls = []
 def fake_discover(req):
     discover_calls.append(req)
     return {"city": req.city, "clinic_urls": list(STATUS) + ["https://boom.ca"]}
-m.discover = fake_discover
+discovery.discover = fake_discover
 
 rank_calls = []
 def fake_rank(req):
@@ -52,7 +53,7 @@ def fake_rank(req):
     return {"ranked_clinics": [{"name": x["name"], "url": x["url"], "score": 90 - i, "reason": "r", "requirements": [], "next_step": "n",
                                 "coverage_tags": [], "phone_number": None, "call_hours": None, "call_script": None}
                                for i, x in enumerate(req.clinics)]}
-m.rank = fake_rank
+ranking.rank = fake_rank
 
 
 def mission(**body):
@@ -94,26 +95,26 @@ check("auto_watch_closed false -> skipped", "watched" not in [e["type"] for e in
 
 # --- discover fails
 def broken_discover(req): raise RuntimeError("search down")
-m.discover = broken_discover
+discovery.discover = broken_discover
 code, ev = mission(city="London, ON")
 types = [e["type"] for e in ev]
-check("discover error -> error event, London defaults, still done", "error" in types and ev[types.index("discovered")]["urls"] == m.DEFAULT_CLINIC_URLS
+check("discover error -> error event, London defaults, still done", "error" in types and ev[types.index("discovered")]["urls"] == config.DEFAULT_CLINIC_URLS
       and types[-1] == "done", str(types))
-m.scan_one = lambda u: m.failed_clinic(u, "scan error: x")
+scanning.scan_one = lambda u: common.failed_clinic(u, "scan error: x")
 code, ev = mission(city="Kitchener, ON")
 types = [e["type"] for e in ev]
 check("non-London + nothing found -> empty scan, rank error, done", ev[types.index("discovered")]["urls"] == [] and types[-1] == "done"
       and any(e.get("stage") == "rank" and e["type"] == "error" for e in ev) and ev[-1]["summary"]["total_scanned"] == 0, str(ev))
-m.scan_one, m.discover = fake_scan_one, fake_discover
+scanning.scan_one, discovery.discover = fake_scan_one, fake_discover
 
 # --- rank fails
 def broken_rank(req): raise HTTPException(status_code=502, detail="rank failed: gemini down")
-m.rank = broken_rank
+ranking.rank = broken_rank
 code, ev = mission(user_email="pat@x.ca")
 types = [e["type"] for e in ev]
 check("rank error -> error event, watch still runs, done", "ranked" not in types and "watched" in types and types[-1] == "done"
       and any(e["type"] == "error" and "gemini down" in e["message"] for e in ev) and ev[-1]["summary"]["ranked"] is False, str(types))
-m.rank = fake_rank
+ranking.rank = fake_rank
 
 # --- custom urls skip discovery
 discover_calls.clear()
@@ -122,10 +123,10 @@ check("clinic_urls skips discover, deduped", discover_calls == [] and [e for e i
 
 # --- cache mode (no TinyFish key needed, no discover, no scan)
 cached = [fake_scan_one(u) for u in ["https://open.ca", "https://full1.ca"]]
-m.CACHE_PATH.write_text(json.dumps({"clinics": cached}), encoding="utf-8")
+config.CACHE_PATH.write_text(json.dumps({"clinics": cached}), encoding="utf-8")
 os.environ.pop("TINYFISH_API_KEY")
 discover_calls.clear()
-m.scan_one = lambda u: (_ for _ in ()).throw(AssertionError("must not scan"))
+scanning.scan_one = lambda u: (_ for _ in ()).throw(AssertionError("must not scan"))
 code, ev = mission(use_cache=True, user_email="cache@x.ca")
 types = [e["type"] for e in ev]
 check("cache mode works without TinyFish key", code == 200 and types.count("clinic_scanned") == 2 and discover_calls == [] and types[-1] == "done", str(ev)[:300])
@@ -133,7 +134,7 @@ check("cache mode still ranks + watches", "ranked" in types and ev[types.index("
 code, j = mission()
 check("live mode without key -> JSON 500 before stream", code == 500 and "TINYFISH_API_KEY" in j["detail"], str(j))
 os.environ["TINYFISH_API_KEY"] = "fake"
-m.scan_one = fake_scan_one
+scanning.scan_one = fake_scan_one
 
 # --- validation
 check("bad email -> 422", mission(user_email="nope")[0] == 422)
