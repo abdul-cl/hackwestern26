@@ -11,7 +11,7 @@ function StepIcon({ status }) {
 }
 
 const STEP_STYLE = {
-  active: "bg-emerald-600 text-white ring-emerald-600",
+  active: "bg-brand text-white ring-brand",
   done: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   error: "bg-rose-50 text-rose-700 ring-rose-200",
   skipped: "bg-slate-100 text-slate-500 ring-slate-200",
@@ -31,10 +31,12 @@ export default function AgentFeed({ state, onStop, onReset }) {
 
   if (!running && log.length === 0) return null;
 
-  const agentCounts = Object.values(agents).reduce((acc, s) => ({ ...acc, [s]: (acc[s] || 0) + 1 }), {});
+  // index of the furthest stage that has started (drives the progress line)
+  const reached = Math.max(0, ...STAGES.map((s, i) => (stageStatus[s.key] ? i : 0)));
+  const agentCounts =Object.values(agents).reduce((acc, s) => ({ ...acc, [s]: (acc[s] || 0) + 1 }), {});
 
   return (
-    <section className="card p-4" aria-live="polite">
+    <section className="card animate-card-in p-4" aria-live="polite">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Live agent activity</h2>
         <div className="flex items-center gap-1">
@@ -49,13 +51,19 @@ export default function AgentFeed({ state, onStop, onReset }) {
         </div>
       </div>
 
-      {/* step-by-step progress */}
-      <ol className="mt-3 grid grid-cols-5 gap-2">
+      {/* step-by-step progress: the line between the steps fills up to the stage that's running */}
+      <ol className="relative mt-3 grid grid-cols-5 gap-2">
+        <span className="absolute left-[10%] right-[10%] top-4 h-0.5 -translate-y-1/2 rounded-full bg-slate-200" aria-hidden="true" />
+        <span
+          className="absolute left-[10%] right-[10%] top-4 h-0.5 origin-left -translate-y-1/2 rounded-full bg-pine-500 transition-transform duration-700 ease-flow"
+          style={{ transform: `translateY(-50%) scaleX(${reached / (STAGES.length - 1)})` }}
+          aria-hidden="true"
+        />
         {STAGES.map((s, i) => {
           const status = stageStatus[s.key];
           return (
-            <li key={s.key} className="flex flex-col items-center gap-1 text-center">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ring-1 ${STEP_STYLE[status] || "bg-white text-slate-400 ring-slate-200"}`}>
+            <li key={s.key} className="relative flex flex-col items-center gap-1 text-center">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ring-1 transition-colors duration-500 ${status === "active" ? "animate-pop-in" : ""} ${STEP_STYLE[status] || "bg-surface text-slate-400 ring-slate-200"}`}>
                 <StepIcon status={status} /> {!status && i + 1}
               </div>
               <span className={`text-[11px] font-medium sm:text-xs ${status ? "text-slate-700" : "text-slate-400"}`}>{s.label}</span>
@@ -76,7 +84,7 @@ export default function AgentFeed({ state, onStop, onReset }) {
       )}
 
       {error && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+        <div className="mt-3 flex animate-slide-down items-start gap-2 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -85,7 +93,7 @@ export default function AgentFeed({ state, onStop, onReset }) {
       {open && (
         <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2 text-xs">
           {log.map((l) => (
-            <li key={l.id} className="flex items-start gap-2">
+            <li key={l.id} className="flex animate-row-in items-start gap-2">
               <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${KIND_DOT[l.kind] || KIND_DOT.info}`} />
               <span className="shrink-0 tabular-nums text-slate-400">{l.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
               <span className={l.kind === "error" ? "text-rose-700" : "text-slate-700"}>{l.text}</span>
@@ -103,8 +111,8 @@ export default function AgentFeed({ state, onStop, onReset }) {
             ["Waitlist", summary.waitlist_count],
             ["Not accepting", summary.closed_count],
             ["Now watching", summary.watched_count],
-          ].map(([label, n]) => (
-            <div key={label} className="rounded-lg bg-slate-50 p-2">
+          ].map(([label, n], i) => (
+            <div key={label} style={{ animationDelay: `${i * 70}ms` }} className="animate-pop-in rounded-lg bg-slate-50 p-2">
               <div className="text-lg font-semibold text-slate-900">{n ?? 0}</div>
               <div className="text-xs text-slate-500">{label}</div>
             </div>

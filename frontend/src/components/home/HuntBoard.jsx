@@ -55,8 +55,8 @@ export default function HuntBoard() {
   return (
     <div className="relative">
       {/* offset mint plate behind the board */}
-      <div className="absolute -inset-3 -z-10 translate-x-4 translate-y-4 rounded-[28px] bg-mint sm:-inset-4" aria-hidden="true" />
-      <div className="overflow-hidden rounded-3xl border border-pine-900/10 bg-white shadow-[0_24px_60px_-28px_rgba(9,58,49,.35)]">
+      <div className="absolute -inset-3 -z-10 translate-x-4 translate-y-4 rounded-[28px] bg-accent sm:-inset-4" aria-hidden="true" />
+      <div className="overflow-hidden rounded-3xl border border-pine-900/10 bg-surface shadow-[0_24px_60px_-28px_rgba(9,58,49,.35)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
             <div className="font-display text-[15px] font-semibold text-ink">Checking clinics near N6A 3K7</div>

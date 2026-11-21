@@ -103,7 +103,7 @@ export function CallScriptDemo() {
             role="tab"
             aria-selected={l === lang}
             onClick={() => setLang(l)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${l === lang ? "bg-ink text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${l === lang ? "bg-ink text-paper" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
           >
             {l}
           </button>
@@ -139,13 +139,13 @@ export function WatchAlertDemo() {
         ))}
       </div>
       {opened ? (
-        <div className="flex animate-slide-down items-start gap-3 bg-pine-600 px-5 py-4 text-white">
+        <div className="flex animate-slide-down items-start gap-3 bg-brand px-5 py-4 text-white">
           <BellRing className="mt-0.5 h-5 w-5 shrink-0" />
           <div className="flex-1 text-sm">
             <div className="font-semibold">Riverstone Medical Clinic is now accepting new patients</div>
-            <div className="text-pine-100">It was full when you started watching. Spots fill quickly.</div>
+            <div className="text-white/80">It was full when you started watching. Spots fill quickly.</div>
           </div>
-          <button onClick={() => setOpened(false)} className="text-xs text-pine-100 underline">Reset</button>
+          <button onClick={() => setOpened(false)} className="text-xs text-white/80 underline">Reset</button>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">

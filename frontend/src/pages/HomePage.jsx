@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 import { Eye, Globe2, Hand, Lock, ScanSearch, ShieldCheck, Sparkles } from "lucide-react";
 import HuntBoard from "../components/home/HuntBoard";
 import { CallScriptDemo, FormFillDemo, VerifyDemo, WatchAlertDemo } from "../components/home/FeatureDemos";
+import Reveal from "../components/Reveal";
+
+// Hero lines arrive one after another (CSS animation delays).
+const delay = (ms) => ({ animationDelay: `${ms}ms` });
 
 const STEPS = [
   { icon: Globe2, title: "Find the clinics", text: "CareScout searches your city for family practices and family health teams with their own websites." },
@@ -40,23 +44,25 @@ const PROMISES = [
 ];
 
 export default function HomePage() {
+  // The steps sit in one row on wide screens, so they arrive left to right; stacked on phones, each just appears as it scrolls in.
+  const wide = typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches;
   return (
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="container-page grid grid-cols-1 items-center gap-12 pb-20 pt-12 sm:pt-16 lg:grid-cols-[1.05fr,1fr] lg:gap-16 lg:pb-28 lg:pt-20">
           <div className="min-w-0">
-            <h1 className="max-w-xl text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.03em] sm:text-6xl lg:text-[4.1rem]">
+            <h1 className="max-w-xl animate-card-in text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.03em] sm:text-6xl lg:text-[4.1rem]">
               Stop phoning every clinic. CareScout checks them for you.
             </h1>
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">
+            <p style={delay(90)} className="mt-6 max-w-lg animate-card-in text-lg leading-relaxed text-slate-600">
               AI agents read clinic websites across your city, find the family doctors accepting new patients, and tell you exactly what to do next.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div style={delay(180)} className="mt-8 flex animate-card-in flex-wrap gap-3">
               <Link to="/find" className="btn-primary btn-lg">Find a doctor</Link>
               <Link to="/find?demo=1" className="btn-secondary btn-lg">Watch a demo search</Link>
             </div>
-            <p className="mt-6 text-sm text-slate-500">Free to use. Works in English, French, Arabic, Mandarin and Punjabi.</p>
+            <p style={delay(260)} className="mt-6 animate-card-in text-sm text-slate-500">Free to use. Works in English, French, Arabic, Mandarin and Punjabi.</p>
           </div>
           <div className="mx-auto w-full min-w-0 max-w-[520px] pr-3 sm:pr-4 lg:mx-0 lg:justify-self-end">
             <HuntBoard />
@@ -65,17 +71,19 @@ export default function HomePage() {
       </section>
 
       {/* How it works: a real sequence, so it's numbered */}
-      <section className="border-y border-slate-200/80 bg-white">
+      <section className="border-y border-slate-200/80 bg-surface">
         <div className="container-page py-20">
-          <div className="max-w-2xl">
+          <Reveal className="max-w-2xl">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">One search, four agents</h2>
             <p className="mt-3 text-slate-600">Each step is handled by its own agent, so you can watch the work happen live.</p>
-          </div>
-          <ol className="relative mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+          </Reveal>
+          {/* the line draws left to right while the steps arrive in the same order: the pipeline, in motion */}
+          <Reveal as="ol" still className="relative mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
             <span className="absolute left-5 right-5 top-5 hidden h-px bg-slate-200 lg:block" aria-hidden="true" />
+            <span className="flow-line absolute left-5 right-5 top-5 hidden h-px bg-pine-500 lg:block" aria-hidden="true" />
             {STEPS.map(({ icon: Icon, title, text }, i) => (
-              <li key={title} className="relative">
-                <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-ink font-display text-sm font-bold text-white ring-8 ring-white">
+              <Reveal as="li" key={title} delay={wide ? 150 + i * 260 : 0} className="relative">
+                <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-ink font-display text-sm font-bold text-paper ring-8 ring-surface">
                   {i + 1}
                 </div>
                 <div className="mt-4 flex items-center gap-2">
@@ -83,9 +91,9 @@ export default function HomePage() {
                   <h3 className="text-lg font-semibold">{title}</h3>
                 </div>
                 <p className="mt-1.5 text-sm text-slate-600">{text}</p>
-              </li>
+              </Reveal>
             ))}
-          </ol>
+          </Reveal>
         </div>
       </section>
 
@@ -93,40 +101,40 @@ export default function HomePage() {
       <section className="container-page space-y-24 py-24">
         {FEATURES.map((f, i) => (
           <div key={f.title} className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
-            <div className={`min-w-0 ${i % 2 ? "lg:order-2" : ""}`}>
+            <Reveal x={i % 2 ? "28px" : "-28px"} y="0px" className={`min-w-0 ${i % 2 ? "lg:order-2" : ""}`}>
               <h2 className="max-w-md text-3xl font-bold leading-tight tracking-tight">{f.title}</h2>
               <p className="mt-4 max-w-md text-slate-600">{f.text}</p>
-            </div>
-            <div className={`mx-auto w-full min-w-0 max-w-md ${i % 2 ? "lg:order-1" : ""}`}>{f.demo}</div>
+            </Reveal>
+            <Reveal delay={140} y="28px" className={`mx-auto w-full min-w-0 max-w-md ${i % 2 ? "lg:order-1" : ""}`}>{f.demo}</Reveal>
           </div>
         ))}
       </section>
 
       {/* Promises */}
       <section id="safety" className="container-page">
-        <div className="rounded-[28px] bg-ink px-6 py-14 text-white sm:px-12">
+        <Reveal y="28px" className="rounded-[28px] bg-night px-6 py-14 text-white sm:px-12">
           <h2 className="max-w-xl text-3xl font-bold tracking-tight text-white sm:text-4xl">You stay in control of your health information</h2>
           <ul className="mt-10 grid gap-8 md:grid-cols-3">
-            {PROMISES.map(({ icon: Icon, title, text }) => (
-              <li key={title} className="border-t border-white/15 pt-5">
+            {PROMISES.map(({ icon: Icon, title, text }, i) => (
+              <Reveal as="li" key={title} delay={250 + i * 120} className="border-t border-white/15 pt-5">
                 <Icon className="h-5 w-5 text-mint" />
                 <div className="mt-3 font-display text-lg font-semibold text-white">{title}</div>
-                <p className="mt-1.5 text-sm text-slate-300">{text}</p>
-              </li>
+                <p className="mt-1.5 text-sm text-white/70">{text}</p>
+              </Reveal>
             ))}
           </ul>
           <Link to="/how-it-works#safety" className="mt-10 inline-block text-sm font-medium text-mint underline-offset-4 hover:underline">
             Read how CareScout handles your data
           </Link>
-        </div>
+        </Reveal>
       </section>
 
       {/* Closing call to action */}
-      <section className="container-page pt-24 text-center">
+      <Reveal as="section" className="container-page pt-24 text-center">
         <h2 className="mx-auto max-w-2xl text-4xl font-extrabold tracking-[-0.02em] sm:text-5xl">Your next family doctor might already be taking patients.</h2>
         <p className="mx-auto mt-4 max-w-lg text-slate-600">Start a search with your postal code. It takes a few minutes, and you can keep browsing while the agents work.</p>
         <Link to="/find" className="btn-primary btn-lg mt-8">Find a doctor</Link>
-      </section>
+      </Reveal>
     </>
   );
 }

@@ -37,8 +37,8 @@ export default function ApplyModal({ clinic, defaults, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-slate-900/40 p-4 sm:items-center" onClick={() => !loading && onClose()}>
-      <div className="card max-h-[90vh] w-full max-w-lg overflow-y-auto p-5" role="dialog" aria-modal="true" aria-labelledby="apply-title" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center animate-fade-in bg-black/50 p-4 backdrop-blur-[2px] sm:items-center" onClick={() => !loading && onClose()}>
+      <div className="card max-h-[90vh] w-full max-w-lg animate-sheet-in overflow-y-auto p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="apply-title" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="apply-title" className="text-base font-semibold text-slate-900">Auto-Fill Waitlist</h2>
