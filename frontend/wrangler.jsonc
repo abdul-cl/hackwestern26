@@ -1,0 +1,15 @@
+// Cloudflare Workers config for the CareScout website (static assets only, no server code).
+// Cloudflare builds it from GitHub: root directory "frontend", build command "npm run build",
+// deploy command "npx wrangler deploy". See DEPLOY.md.
+{
+  // Must match the Worker's name in the Cloudflare dashboard (it's also the start of the site's address:
+  // https://carescout.<your-subdomain>.workers.dev).
+  "name": "carescout",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist/",
+    // The site is a single-page app (React Router): any address that isn't a real file, like /find or /watchdog,
+    // gets index.html, and the app shows the right page. Unknown pages show the app's own "page not found".
+    "not_found_handling": "single-page-application"
+  }
+}
