@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.13.5-nightly.202611160626.76f1b5129",
+  "checkpoint_id": "01M7ZP25BPXD0D2GGDZZBPJ0Q1",
+  "strategy": "manual-commit",
+  "branch": "Abdul/frontend",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "backend/app/__pycache__/__init__.cpython-315.pyc",
+    "backend/app/__pycache__/apply_form.cpython-315.pyc",
+    "backend/app/__pycache__/cpso.cpython-315.pyc",
+    "backend/app/__pycache__/geo.cpython-315.pyc",
+    "backend/app/__pycache__/models.cpython-315.pyc",
+    "frontend/.env.example",
+    "frontend/vercel.json",
+    "render.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "redaction": {
+    "replacements": 201,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 76,
+      "credentialed_uri": 0,
+      "entropy": 71,
+      "key_context": 54,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
