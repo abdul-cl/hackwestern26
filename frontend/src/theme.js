@@ -25,6 +25,18 @@ function apply(theme) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme]);
 }
 
+/** True while the site is in dark mode. Follows the <html> class, so it updates whichever toggle changed it. */
+export function useIsDark() {
+  const read = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(read()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return dark;
+}
+
 export function useTheme() {
   const [theme, setTheme] = useState(() => (typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"));
 

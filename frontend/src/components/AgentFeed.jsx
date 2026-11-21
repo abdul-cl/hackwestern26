@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Loader2, MinusCircle, RotateCcw, Square } from "lucide-react";
 import { STAGES, recordedLabel } from "../hooks/useMission";
+import CountUp from "./CountUp";
 
 function StepIcon({ status }) {
   if (status === "active") return <Loader2 className="h-4 w-4 animate-spin" />;
@@ -22,11 +23,12 @@ const KIND_DOT = { stage: "bg-emerald-500", result: "bg-sky-500", error: "bg-ros
 /** Live progress bar + compact log for POST /api/mission/stream (state comes from useMission). */
 export default function AgentFeed({ state, onStop, onReset }) {
   const [open, setOpen] = useState(true);
-  const logEnd = useRef(null);
+  const logList = useRef(null);
   const { running, stageStatus, log, agents, error, summary } = state;
 
   useEffect(() => {
-    if (open) logEnd.current?.scrollIntoView({ block: "nearest" });
+    // keep the newest line in view by scrolling the log box itself (never the page)
+    if (open && logList.current) logList.current.scrollTop = logList.current.scrollHeight;
   }, [log.length, open]);
 
   if (!running && log.length === 0) return null;
@@ -98,7 +100,7 @@ export default function AgentFeed({ state, onStop, onReset }) {
       )}
 
       {open && (
-        <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2 text-xs">
+        <ul ref={logList} data-lenis-prevent className="mt-3 max-h-48 space-y-1 overflow-y-auto overscroll-contain rounded-lg bg-slate-50 p-2 text-xs">
           {log.map((l) => (
             <li key={l.id} className="flex animate-row-in items-start gap-2">
               <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${KIND_DOT[l.kind] || KIND_DOT.info}`} />
@@ -106,7 +108,6 @@ export default function AgentFeed({ state, onStop, onReset }) {
               <span className={l.kind === "error" ? "text-rose-700" : "text-slate-700"}>{l.text}</span>
             </li>
           ))}
-          <li ref={logEnd} />
         </ul>
       )}
 
@@ -120,7 +121,7 @@ export default function AgentFeed({ state, onStop, onReset }) {
             ["Couldn't check", summary.failed_count],
           ].map(([label, n], i) => (
             <div key={label} style={{ animationDelay: `${i * 70}ms` }} className="animate-pop-in rounded-lg bg-slate-50 p-2">
-              <div className="text-lg font-semibold text-slate-900">{n ?? 0}</div>
+              <div className="text-lg font-semibold text-slate-900"><CountUp value={n ?? 0} duration={0.9} /></div>
               <div className="text-xs text-slate-500">{label}</div>
             </div>
           ))}

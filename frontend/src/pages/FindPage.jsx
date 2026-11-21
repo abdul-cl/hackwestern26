@@ -12,6 +12,7 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import NextSteps from "../components/NextSteps";
 import WatchPrompt from "../components/WatchPrompt";
 import { useFlip } from "../hooks/useFlip";
+import { scrollToTarget } from "../lib/motion";
 
 function EmptyState() {
   const steps = [
@@ -75,7 +76,8 @@ export default function FindPage() {
 
   const selectClinic = useCallback((url) => {
     setSelectedUrl(url);
-    cardRefs.current[url]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const card = cardRefs.current[url];
+    if (card) scrollToTarget(card, { offset: -96 });
   }, []);
 
   return (
