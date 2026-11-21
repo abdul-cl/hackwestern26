@@ -1,7 +1,7 @@
 import { forwardRef, useState } from "react";
 import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
-import { checkedLabel, displayStatus, isFailedScan } from "../lib/clinics";
+import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel } from "../lib/clinics";
 import { useAppState } from "../state/AppState";
 import StatusBadge from "./StatusBadge";
 import CallScript from "./CallScript";
@@ -32,6 +32,7 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
   const { publicDemo, search, mission } = useAppState();
   const [recheck, setRecheck] = useState({ loading: false, note: null, error: null });
   const checked = checkedLabel(clinic);
+  const lastSeen = lastSeenLabel(clinic);
   const failed = isFailedScan(clinic);
   const status = displayStatus(clinic);
   const host = String(clinic.url).replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
@@ -117,6 +118,9 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         </div>
       )}
 
+      {lastSeen && (
+        <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-700 ring-1 ring-inset ring-stone-200">{lastSeen}</p>
+      )}
       {(checked || recheck.note || recheck.error) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {checked && <span className="flex items-center gap-1 text-slate-400"><Clock className="h-3.5 w-3.5" />{checked}</span>}

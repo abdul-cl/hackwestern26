@@ -5,9 +5,12 @@ export function isFailedScan(clinic) {
   return notes.startsWith("scan failed") || notes.startsWith("scan error");
 }
 
-/** Effective status for display: a failed scan is "unknown", never "closed". */
+/** Effective status for display: a failed scan is "unknown" (never "closed"); an old result is "expired"
+ * (its status is only what was last seen, so it's never shown as current). */
 export function displayStatus(clinic) {
-  return isFailedScan(clinic) ? "unknown" : clinic.status;
+  if (isFailedScan(clinic)) return "unknown";
+  if (clinic.expired) return "expired";
+  return clinic.status;
 }
 
 export const STATUS_STYLE = {
@@ -15,6 +18,7 @@ export const STATUS_STYLE = {
   waitlist: { label: "Waitlist Open", pin: "#f59e0b", badge: "bg-amber-50 text-amber-700 ring-amber-600/20" },
   closed: { label: "Not Accepting", pin: "#ef4444", badge: "bg-rose-50 text-rose-700 ring-rose-600/20" },
   unknown: { label: "Couldn't check", pin: "#94a3b8", badge: "bg-slate-100 text-slate-600 ring-slate-500/20" },
+  expired: { label: "Needs a re-check", pin: "#a8a29e", badge: "bg-stone-100 text-stone-700 ring-stone-500/20" },
 };
 
 /**
@@ -49,4 +53,12 @@ export function checkedLabel(clinic) {
   const mins = Math.round((Date.now() - new Date(clinic.last_checked).getTime()) / 60000);
   const when = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 48 * 60 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} days ago`;
   return `Checked ${when}` + (via && via !== "saved result" ? `, ${via}` : "");
+}
+
+/** "Last seen: Accepting, 10 days ago" for clinics whose availability has expired (null otherwise). */
+export function lastSeenLabel(clinic) {
+  if (!clinic?.expired || isFailedScan(clinic)) return null;
+  const label = STATUS_STYLE[clinic.status]?.label || clinic.status;
+  const days = clinic.status_age_days;
+  return `Last seen: ${label}${days != null ? `, ${Math.round(days)} days ago` : ""}. Re-check before you rely on it.`;
 }

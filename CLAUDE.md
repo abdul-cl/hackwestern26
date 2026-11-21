@@ -52,6 +52,8 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
     - `ALLOWED_ORIGIN_REGEX` — extra CORS pattern, e.g. Vercel preview URLs `https://carescout-[a-z0-9-]+\.vercel\.app`.
     - `DATA_DIR` (default `backend/`) — folder for `clinics.db`. On Railway/Render point it at a persistent volume (e.g. `/data`) so the clinic database and watches survive redeploys.
     - `FRESH_HOURS` (default 12) — a clinic checked within this many hours is shown from the database without re-checking.
+    - `MAX_STATUS_AGE_DAYS` (default 7) — availability older than this is **expired**: kept in the database but returned with `expired: true` and shown as "Needs a re-check" (last-seen status), never as current; not counted as accepting/closed, not auto-watched, ranked low.
+    - `DEAD_AFTER_DAYS` (default 30) + `DEAD_MIN_FAILS` (default 3) — a clinic whose website has failed every check for that long is hidden from searches (not deleted; the refresher still retries it last, and one good check brings it back).
     - `REFRESH_INTERVAL_MIN` (default `0` = off) — background job re-checking the most out-of-date clinics every N minutes (`REFRESH_BATCH`, default 20 per run; `REFRESH_ALLOW_AGENT=0` to never use browser agents there). Status changes fire Watchdog alerts.
     - `GEMINI_RPM` (default 12) — spacing for page-reading Gemini calls (free tier ~15/min). `CARESCOUT_SEED=0` skips loading `seed_clinics.json` into an empty database.
     - Run uvicorn without `--host 0.0.0.0` unless you mean to expose it on the network (hosts like Railway/Render need it; their start command sets it).
@@ -119,7 +121,7 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
       - `{ "type": "ranked", "ranked_clinics": [ ...same as /api/rank... ] }`
       - `{ "type": "stage", "stage": "watch", "message": "..." }` then `{ "type": "watched", "count": 2, "clinics": [ <watch record>, ... ] }` (only if `auto_watch_closed` and `user_email`; otherwise just a `stage` event saying "Watchdog skipped (...)")
       - `{ "type": "error", "stage": "discover | rank | watch | mission", "message": "string" }` (a stage failed; the mission continues)
-      - `{ "type": "done", "summary": { "total_scanned": 5, "accepting_count": 1, "waitlist_count": 1, "closed_count": 2, "failed_count": 1, "watched_count": 2, "ranked": true, "top_clinic": "string | null", "duration_s": 95.3, "from_database": 3, "rechecked": 2 } }` (ALWAYS the last event)
+      - `{ "type": "done", "summary": { "total_scanned": 5, "accepting_count": 1, "waitlist_count": 1, "closed_count": 2, "failed_count": 1, "watched_count": 2, "ranked": true, "top_clinic": "string | null", "duration_s": 95.3, "from_database": 3, "rechecked": 2, "expired_count": 0 } }` (ALWAYS the last event; accepting/waitlist/closed counts exclude expired clinics)
     - Only clinics that scanned successfully as `closed` are auto-watched (a failed scan is not "closed"). Re-running never duplicates watches.
     - `422` for a bad `user_email` / too many `clinic_urls` / oversized lists; `500` before the stream starts if the server's TinyFish key is missing (live mode).
     - Timing: clinics fresh in the database are instant; quick re-checks take a few seconds each; only sites that need a browser agent take 1-3 min each (2 at a time). Demo mode is a few seconds in total (just ranking).
@@ -132,10 +134,10 @@ Each feature is its own module with its own `router`; `main.py` only wires them 
       - `profile_url` is only ever a `https://doctors.cpso.on.ca/...` link. `cpso_number` is digits only. `languages` may be `[]`.
       - Uses one TinyFish agent (shares the 2-agent limit with scans). Found results are cached in memory for 1 hour, so repeat lookups are instant.
     - `422` for a missing/too-short `doctor_name`; `500` only if the server's TinyFish key is missing.
-- **Clinic database endpoints** (`clinics_api.py`). Extra fields on Clinic objects from the database / mission: `"last_checked": "2026-11-21T14:03:00Z | null"`, `"checked_via": "page | agent | saved | null"` (page = quick read of the clinic's website, agent = TinyFish browser agent, saved = seed / demo data).
+- **Clinic database endpoints** (`clinics_api.py`). Extra fields on Clinic objects from the database / mission: `"last_checked": "2026-11-21T14:03:00Z | null"`, `"checked_via": "page | agent | saved | null"` (page = quick read of the clinic's website, agent = TinyFish browser agent, saved = seed / demo data), `"expired": false` (true = `status` is only the last-seen value, older than `MAX_STATUS_AGE_DAYS`), `"status_age_days": 0.4`.
 - `GET /api/clinics?city=London, ON&postal_code=N6A 3K7&limit=25&include_unchecked=false`
     - Response: `{ "city": "string", "clinics": [ <Clinic + last_checked / checked_via, distance_km if postal_code> ], "stats": <stats> }`, closest first (accepting first without a postal code). Instant; allowed on the public demo.
-- `GET /api/clinics/stats` → `{ "total": 40, "checked": 36, "fresh": 30, "by_status": { "accepting": 9, "waitlist": 7, "closed": 20 }, "cities": ["London, ON"], "last_refresh": "ISO | null" }`
+- `GET /api/clinics/stats` → `{ "total": 40, "checked": 36, "fresh": 30, "expired": 2, "hidden_dead": 1, "by_status": { "accepting": 9, "waitlist": 7, "closed": 20 }, "cities": ["London, ON"], "last_refresh": "ISO | null" }`
 - `POST /api/clinics/refresh` `{ "url": "https://...", "city": "London, ON", "user_postal_code": null }` ("Re-check" button on a card)
     - Re-checks one clinic now (always re-reads, even if unchanged). Response: `{ "clinic": <Clinic>, "method": "unchanged | page | agent | failed", "status_changed": false, "error": "string | null" }`. On `failed` the last good result is returned when there is one. `403` on the public demo.
 - `POST /api/clinics/seed` `{ "city": "London, ON", "max_new": 10 }` → web search for more clinics in that city (1-20); new ones are added and checked in the background. Response `{ "city", "added": [...], "found": [...], "total": 41 }`. `403` on the public demo.
@@ -202,6 +204,7 @@ interface Clinic {            // from /api/scan and /api/scan/stream
   evidence_quote: string; waitlist_url: string | null; raw_notes: string;
   address: string | null; lat: number | null; lng: number | null; distance_km: number | null;
   last_checked?: string | null; checked_via?: "page" | "agent" | "saved" | null;   // from the database / mission
+  expired?: boolean; status_age_days?: number | null;   // expired: status is last-seen only -> show "Needs a re-check"
 }
 interface RankedClinic {      // from /api/rank (no lat / lng: join to Clinic by `url`)
   name: string; url: string | null; score: number; reason: string; requirements: string[]; next_step: string;
@@ -270,6 +273,7 @@ type MissionEvent =
 ## Rendering rules
 - **Failed scans:** a clinic whose `raw_notes` starts with `scan failed` or `scan error` is NOT really closed. Show it as "Couldn't check: visit site" with a link to `url`. Its `name` is just the URL.
 - **Status badges:** `accepting` → Accepting, `waitlist` → Waitlist Open, `closed` → Not Accepting. Show `evidence_quote` as the "why".
+- **Expired results:** when `expired` is true, show "Needs a re-check" (grey) instead of the status, plus "Last seen: <status>, N days ago" from `status` / `status_age_days`. Never present it as current.
 - **Map:** any library works (e.g. Leaflet / react-leaflet with OpenStreetMap tiles; tiles need attribution "© OpenStreetMap contributors"). Only add pins where `lat` and `lng` are not null; list clinics without coordinates beside the map. Show `distance_km` as "x.x km away" when not null; it's straight-line, not driving distance.
 - **Postal code input:** must be a full code like `N6A 3K7` for distances. Partial codes are silently ignored (no error, just no distances).
 - **Rank:** sort is already done (best first). Join to scan results with `ranked.url === clinic.url` (fallback: same `name`); if no match, show the ranked card without map data. `reason` / `requirements` / `next_step` / `call_script` are in the chosen language; `coverage_tags` are English badges.

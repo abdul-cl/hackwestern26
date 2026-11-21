@@ -52,7 +52,7 @@ export default function ClinicMap({ clinics, selectedUrl, onSelect }) {
       </MapContainer>
 
       <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex flex-wrap gap-2 rounded-lg bg-white/90 px-2 py-1 text-xs shadow-sm">
-        {["accepting", "waitlist", "closed"].map((k) => (
+        {["accepting", "waitlist", "closed", ...(clinics.some((c) => displayStatus(c) === "expired") ? ["expired"] : [])].map((k) => (
           <span key={k} className="flex items-center gap-1 text-slate-600">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_STYLE[k].pin }} />
             {STATUS_STYLE[k].label}
