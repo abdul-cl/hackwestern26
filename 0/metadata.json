@@ -1,0 +1,90 @@
+{
+  "cli_version": "0.13.5-nightly.202611160626.76f1b5129",
+  "checkpoint_id": "01M7ZEC1VWQVHV9JBBE2NNX5XP",
+  "session_id": "0f59f6c3-6e9b-467f-93fe-f9a8b292fb84",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-21T16:17:31.4556232Z",
+  "branch": "Ayush/frontend",
+  "checkpoints_count": 6,
+  "save_step_count": 1,
+  "files_touched": [
+    "frontend/index.html",
+    "frontend/src/components/AlertBanner.jsx",
+    "frontend/src/components/ApplyModal.jsx",
+    "frontend/src/components/CallScript.jsx",
+    "frontend/src/components/Layout.jsx",
+    "frontend/src/components/Logo.jsx",
+    "frontend/src/components/SiteFooter.jsx",
+    "frontend/src/components/SiteNav.jsx",
+    "frontend/src/components/WatchdogView.jsx",
+    "frontend/src/components/home/FeatureDemos.jsx",
+    "frontend/src/components/home/HuntBoard.jsx",
+    "frontend/src/index.css",
+    "frontend/src/pages/FindPage.jsx",
+    "frontend/src/pages/HomePage.jsx",
+    "frontend/src/pages/HowItWorksPage.jsx",
+    "frontend/tailwind.config.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "dde265f1a6d0",
+  "compact_transcript_start": 0,
+  "session_token_usage": {
+    "input_tokens": 896,
+    "cache_creation_tokens": 820288,
+    "cache_read_tokens": 156880102,
+    "output_tokens": 422330,
+    "api_call_count": 396
+  },
+  "redaction": {
+    "replacements": 201,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 76,
+      "credentialed_uri": 0,
+      "entropy": 71,
+      "key_context": 54,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01BETBR3KHZkM9MKkci2LfpZ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "frontend-design:frontend-design"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "f97af69a8399",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 2980,
+        "end": 2981,
+        "entry_ids": [
+          "e36f65d6-6f1b-4d51-92c1-001e09944260"
+        ],
+        "tool_use_id": "toolu_01BETBR3KHZkM9MKkci2LfpZ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01BETBR3KHZkM9MKkci2LfpZ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: frontend-design:frontend-design",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 58
+  }
+}
