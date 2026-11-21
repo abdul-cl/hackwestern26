@@ -1,0 +1,12 @@
+{
+  "clinics": [
+    {
+      "name": "Thames Valley Family Health Team (TVFHT)",
+      "url": "https://thamesvalleyfht.ca/become-a-patient/",
+      "status": "accepting",
+      "evidence_quote": "Thames Valley Family Health Team (TVFHT) is currently accepting new patients for our nurse practitioner clinics in London, Middlesex, Elgin, and Oxford.",
+      "waitlist_url": null,
+      "raw_notes": "Clinic is accepting new patients for nurse practitioner clinics in London, Middlesex, Elgin, and Oxford. Registration requires: (1) name, (2) Ontario health care number, and (3) contact information (phone number, email address, mailing address). Contact via the contact form on the page or call 519-473-0530 ext. 2197 (business hours: Mon-Fri, 8am-4pm). Family can also be registered. Note: patients who already have a family doctor in the area may also be accepted locally."
+    }
+  ]
+}
