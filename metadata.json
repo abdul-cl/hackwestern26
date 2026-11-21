@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.13.5-nightly.202611160626.76f1b5129",
+  "checkpoint_id": "01M7ZH9Q148MWR3EX91Y1B6KYH",
+  "strategy": "manual-commit",
+  "branch": "Ayush/frontend",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "backend/app/main.py",
+    "backend/app/scanning.py",
+    "backend/app/watchdog.py",
+    "backend/tests/test_public.py",
+    "backend/tests/test_smoke.py",
+    "frontend/src/api.js",
+    "frontend/src/state/AppState.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "redaction": {
+    "replacements": 201,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 76,
+      "credentialed_uri": 0,
+      "entropy": 71,
+      "key_context": 54,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
