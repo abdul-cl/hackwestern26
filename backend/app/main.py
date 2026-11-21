@@ -90,10 +90,37 @@ def _trim_hits(now: float) -> None:
             del _hits[ip]
 
 
+APPLY_PATHS = ("/api/apply", "/api/apply/stream")
+_apply_hits: dict[str, deque] = {}
+_apply_day: deque = deque()
+
+
+def apply_quota(request: Request) -> None:
+    """Public Auto-Fill: PUBLIC_APPLY_PER_HOUR per visitor, PUBLIC_APPLY_PER_DAY for the whole site (429 when used up)."""
+    now = time.monotonic()
+    while _apply_day and now - _apply_day[0] > 86_400:
+        _apply_day.popleft()
+    if len(_apply_day) >= config.PUBLIC_APPLY_PER_DAY:
+        raise HTTPException(status_code=429, detail="Auto-Fill has reached today's limit on the public demo. Open the clinic's form and fill it in yourself.")
+    q = _apply_hits.setdefault(client_ip(request), deque())
+    while q and now - q[0] > 3600:
+        q.popleft()
+    if len(q) >= config.PUBLIC_APPLY_PER_HOUR:
+        raise HTTPException(status_code=429, detail="You've used Auto-Fill a few times in the last hour. Try again later, or open the clinic's form and fill it in yourself.")
+    q.append(now)
+    _apply_day.append(now)
+    if len(_apply_hits) > 10_000:
+        for ip in [ip for ip, h in _apply_hits.items() if not h or now - h[-1] > 3600]:
+            del _apply_hits[ip]
+
+
 def public_guard(request: Request):
     if not config.public_restricted(request) or request.method == "OPTIONS":
         return
     path = request.url.path
+    if path in APPLY_PATHS and config.PUBLIC_APPLY:
+        apply_quota(request)  # allowed for visitors, within limits (and only for known clinic forms: apply_form.py)
+        return
     if path in LIVE_ONLY_PATHS:
         raise HTTPException(
             status_code=403,
@@ -155,7 +182,9 @@ app.add_middleware(
 @app.get("/health")
 def health(request: Request):
     # public_demo tells the website to show saved results only (live agents unlock with the admin key)
-    return {"status": "ok", "public_demo": config.public_restricted(request)}
+    public = config.public_restricted(request)
+    # apply: whether Auto-Fill is available to this visitor (on the public demo too, within limits)
+    return {"status": "ok", "public_demo": public, "apply": (not public) or config.PUBLIC_APPLY}
 
 
 app.include_router(scanning.router)

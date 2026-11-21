@@ -85,7 +85,9 @@ remove its address from Railway's `ALLOWED_ORIGINS` / `ALLOWED_ORIGIN_REGEX`.
 
 ## 3. Check it works
 - Open the site → **Watch a demo search**: five London clinics, ranked, in a few seconds.
-- The search bar says it's a public demo; Auto-Fill, Verify Doctor and Check All Now explain that live agents are off.
+- The search bar says it's a public demo; Verify Doctor and Check All Now explain that live agents are off.
+- **Auto-Fill works for visitors**, guarded: only for clinic forms CareScout found, 3 per visitor per hour, 40 a day for the whole site (`PUBLIC_APPLY_PER_HOUR`, `PUBLIC_APPLY_PER_DAY`; `PUBLIC_APPLY=0` turns it off). Each use runs one TinyFish agent.
+- **Feedback comments:** `GET /api/feedback` with header `X-Admin-Key: <CARESCOUT_ADMIN_KEY>` (they're stored in `clinics.db`, so keep `DATA_DIR=/data` on a volume or they're lost on redeploy).
 
 ## Running live agents on the public site (just you)
 Visitors can't start paid agents, but you can, from your own browser:

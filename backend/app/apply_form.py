@@ -2,10 +2,12 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from . import config, common, models, agents
+from . import config, common, models, agents, cache, clinic_db
 
 router = APIRouter()
 
@@ -39,11 +41,41 @@ def apply_result(status: str, summary: str, filled: dict | None = None, screensh
     return {"status": status, "filled_fields": filled or {}, "summary": summary, "screenshot_url": screenshot}
 
 
-def check_url(req: models.ApplyRequest) -> str:
+def _norm(url: str) -> str:
+    return (url or "").strip().rstrip("/").lower()
+
+
+def known_waitlists() -> set[str]:
+    """Every waitlist / intake form address CareScout found on a clinic's site (database, saved demo results, replay)."""
+    found = set()
+    try:
+        import contextlib
+        with contextlib.closing(clinic_db.connect()) as conn:
+            found |= {_norm(r[0]) for r in conn.execute("SELECT waitlist_url FROM clinics WHERE waitlist_url IS NOT NULL")}
+    except Exception:
+        pass
+    saved = cache.load_cache() or {}
+    found |= {_norm(c.get("waitlist_url")) for c in saved.get("clinics", []) if c.get("waitlist_url")}
+    try:
+        recording = json.loads(Path(config.DEMO_REPLAY_PATH).read_text(encoding="utf-8"))
+        for item in recording.get("events", []):
+            clinic = (item.get("event") or {}).get("clinic") or {}
+            if clinic.get("waitlist_url"):
+                found.add(_norm(clinic["waitlist_url"]))
+    except Exception:
+        pass
+    found.discard("")
+    return found
+
+
+def check_url(req: models.ApplyRequest, request: Request | None = None) -> str:
     url = req.waitlist_url.strip()
     if not common.is_http_url(url) or not url.startswith("https://"):
         # Patient data never goes to an unencrypted (http://) page.
         raise HTTPException(status_code=422, detail="waitlist_url must be a valid https:// URL.")
+    if request is not None and config.public_restricted(request) and _norm(url) not in known_waitlists():
+        # Visitors can't point the agent (and our credits) at any address: only forms CareScout found for a clinic.
+        raise HTTPException(status_code=403, detail="On the public demo, Auto-Fill only works for clinic forms CareScout found. Open the clinic's form and fill it in yourself.")
     return url
 
 
@@ -88,19 +120,19 @@ async def run_fill(req: models.ApplyRequest, url: str, on_event=None) -> dict:
 
 
 @router.post("/api/apply")
-async def apply(req: models.ApplyRequest):
+async def apply(req: models.ApplyRequest, request: Request):
     """Fills the waitlist form and stops BEFORE Submit. status: ready_for_review | manual_required | error."""
-    url = check_url(req)
+    url = check_url(req, request)
     config.require_key("TINYFISH_API_KEY")
     return await run_fill(req, url)
 
 
 @router.post("/api/apply/stream")
-async def apply_stream(req: models.ApplyRequest):
+async def apply_stream(req: models.ApplyRequest, request: Request):
     """Same as /api/apply, but streamed so the patient can watch the agent fill the form (SSE):
     {"type": "live", "live_url"} -> {"type": "step", "message"}... -> {"type": "result", "result": <ApplyResult>}
     (result is always the last event)."""
-    url = check_url(req)
+    url = check_url(req, request)
     config.require_key("TINYFISH_API_KEY")
 
     async def events():

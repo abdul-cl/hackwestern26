@@ -45,6 +45,12 @@ def is_admin(request) -> bool:
     return bool(ADMIN_KEY) and bool(key) and secrets.compare_digest(key, ADMIN_KEY)
 
 
+# Auto-Fill on the public demo (it starts a paid browser agent, so it's guarded): only for clinic forms CareScout found,
+# at most PUBLIC_APPLY_PER_HOUR per visitor and PUBLIC_APPLY_PER_DAY for the whole site. PUBLIC_APPLY=0 turns it off.
+PUBLIC_APPLY = os.getenv("PUBLIC_APPLY", "1").strip().lower() not in ("0", "false", "no")
+PUBLIC_APPLY_PER_HOUR = max(0, int(os.getenv("PUBLIC_APPLY_PER_HOUR", "3")))
+PUBLIC_APPLY_PER_DAY = max(0, int(os.getenv("PUBLIC_APPLY_PER_DAY", "40")))
+
 # The shared demo watchlist. On the public demo, watchlists only work for this address, so visitors can try the
 # Watchdog flow without storing their own email, and nobody can add, delete or fake alerts for real people's watches.
 DEMO_EMAIL = "demo@carescout.ca"

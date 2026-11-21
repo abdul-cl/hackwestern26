@@ -52,12 +52,12 @@ export default function FindPage() {
   const [params, setParams] = useSearchParams();
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [applyFor, setApplyFor] = useState(null);
-  const [filters, setFilters] = useState({ status: "all", coverageOnly: false });
+  const [filters, setFilters] = useState({ status: "all" });
   const cardRefs = useRef({});
   const email = search.email.trim();
 
   const allClinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
-  const clinics = useMemo(() => applyFilters(allClinics, filters, search.coverage), [allClinics, filters, search.coverage]);
+  const clinics = useMemo(() => applyFilters(allClinics, filters), [allClinics, filters]);
   // cards glide to their ranked position when ranking arrives
   useFlip(clinics.map((c) => c.url), cardRefs);
 
@@ -97,12 +97,12 @@ export default function FindPage() {
       {state.summary && !state.running && <WatchPrompt key={state.log[0]?.id} clinics={allClinics} watched={state.watched} />}
 
       {allClinics.length > 0 && (
-        <ResultFilters clinics={allClinics} filters={filters} onChange={setFilters} coverage={search.coverage} ranked={!!state.ranked} />
+        <ResultFilters clinics={allClinics} filters={filters} onChange={setFilters} />
       )}
       {allClinics.length > 0 && clinics.length === 0 && (
         <div className="card p-6 text-center text-sm text-slate-500">
           No clinics match these filters.{" "}
-          <button className="font-medium text-pine-700 hover:underline" onClick={() => setFilters({ status: "all", coverageOnly: false })}>Clear filters</button>
+          <button className="font-medium text-pine-700 hover:underline" onClick={() => setFilters({ status: "all" })}>Clear filters</button>
         </div>
       )}
       {clinics.length > 0 ? (

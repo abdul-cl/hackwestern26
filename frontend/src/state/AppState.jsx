@@ -16,12 +16,15 @@ export function AppStateProvider({ children }) {
   const [watchCount, setWatchCount] = useState(0);
   // The backend tells us if it's a public deployment: then only saved (demo) results are available.
   const [publicDemo, setPublicDemo] = useState(false);
+  // Auto-Fill works on the public demo too (the backend limits it); false only if the backend turned it off there.
+  const [applyAvailable, setApplyAvailable] = useState(true);
   const email = search.email.trim();
 
   useEffect(() => {
     api
       .health()
       .then((h) => {
+        if (h.apply === false) setApplyAvailable(false);
         if (h.public_demo) {
           // public demo: saved results only (watchlists there use a shared demo account, see WatchPrompt)
           setPublicDemo(true);
@@ -70,8 +73,8 @@ export function AppStateProvider({ children }) {
   );
 
   const value = useMemo(
-    () => ({ search, setSearch, mission, launch, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, publicDemo }),
-    [search, mission, launch, alert, watchCount, refreshWatchCount, publicDemo],
+    () => ({ search, setSearch, mission, launch, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, publicDemo, applyAvailable }),
+    [search, mission, launch, alert, watchCount, refreshWatchCount, publicDemo, applyAvailable],
   );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

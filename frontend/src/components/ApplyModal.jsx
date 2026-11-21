@@ -9,7 +9,8 @@ import LiveAgentView from "./LiveAgentView";
  * Submit, so the patient always reviews and submits on the clinic's own page.
  */
 export default function ApplyModal({ clinic, defaults, onClose }) {
-  const { publicDemo } = useAppState();
+  const { applyAvailable } = useAppState();
+  const blocked = !applyAvailable;
   const [form, setForm] = useState({ name: "", email: defaults.email || "", phone: "", postal_code: defaults.postalCode || "", reason: "" });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -76,9 +77,9 @@ export default function ApplyModal({ clinic, defaults, onClose }) {
           </span>
         </div>
 
-        {publicDemo && (
+        {blocked && (
           <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <p>Auto-fill runs a live browser agent, which is turned off on this public demo. You can open the clinic's form and fill it in yourself.</p>
+            <p>Auto-Fill is turned off on this site right now. You can open the clinic's form and fill it in yourself.</p>
             <div className="flex justify-end">
               <a href={clinic.waitlist_url} target="_blank" rel="noreferrer" className="btn-primary">
                 Open the clinic's form <ExternalLink className="h-4 w-4" />
@@ -87,7 +88,7 @@ export default function ApplyModal({ clinic, defaults, onClose }) {
           </div>
         )}
 
-        {!result && !publicDemo && (
+        {!result && !blocked && (
           <form onSubmit={submit} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="label" htmlFor="ap-name">Full name</label>

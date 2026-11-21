@@ -1,5 +1,6 @@
 """Gemini Triage: rank, translate and add call scripts / badges: POST /api/rank."""
 import json
+import re
 
 from fastapi import APIRouter, HTTPException
 
@@ -71,7 +72,27 @@ def rank(req: models.RankRequest):
     input_urls = {str(c.get("url")) for c in req.clinics if c.get("url")}
     by_name = {str(c.get("name")): c.get("url") for c in req.clinics if c.get("name")}
     by_lower = {k.strip().lower(): v for k, v in by_name.items()}
+    by_url = {str(c.get("url")): c for c in req.clinics if c.get("url")}
     for c in clinics:
         c["score"] = max(0, min(100, c["score"]))
         c["url"] = by_name.get(c["name"]) or by_lower.get(c["name"].strip().lower()) or (c["url"] if c["url"] in input_urls else None)
+        enforce_contact_rules(c, by_url.get(c["url"]) if c["url"] else None)
     return {"ranked_clinics": sorted(clinics, key=lambda c: -c["score"])}
+
+
+def _digits(text) -> str:
+    return re.sub(r"\D", "", str(text or ""))
+
+
+def enforce_contact_rules(ranked: dict, source: dict | None) -> None:
+    """Check the model's contact details against the clinic's own data (don't just trust the prompt):
+    - a phone number is kept only if its digits appear in what we read from the clinic's site;
+    - a call script only for clinics without an online waitlist that DO list a phone number (a script with no
+      number to call, or for a clinic you can apply to online, is just confusing)."""
+    source = source or {}
+    seen = _digits(" ".join(str(source.get(k) or "") for k in ("raw_notes", "evidence_quote", "address")))
+    phone = _digits(ranked.get("phone_number"))
+    if len(phone) < 7 or phone[-7:] not in seen:
+        ranked["phone_number"] = None
+    if source.get("waitlist_url") or not ranked["phone_number"]:
+        ranked["call_script"] = None
