@@ -84,3 +84,38 @@ export type MissionRequest = {
   max_clinics: number;
   refresh: "auto" | "all";
 };
+
+export type ApplyResult = {
+  status: "ready_for_review" | "manual_required" | "error";
+  filled_fields: Record<string, unknown>;
+  summary: string;
+  screenshot_url: string | null;
+};
+
+export type DoctorVerification = {
+  verified: boolean;
+  cpso_number: string | null;
+  registration_status: string | null;
+  specialty: string | null;
+  languages: string[];
+  gender: string | null;
+  profile_url: string | null;
+  notes: string;
+  lookup_status: "found" | "not_found" | "timeout" | "error";
+};
+
+export type WatchAlert = {
+  id: number;
+  clinic_name: string;
+  url: string;
+  user_email: string;
+  old_status: ClinicStatus;
+  new_status: ClinicStatus;
+  evidence_quote: string;
+  message: string;
+  simulated?: boolean;
+  alert_id?: number;
+  created_at?: string;
+};
+
+export type PatientInfo = { name: string; email: string; phone: string; postal_code: string };

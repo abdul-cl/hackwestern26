@@ -1,7 +1,7 @@
 // Every backend call goes through here, same as frontend/src/api.js
 import { fetch as expoFetch } from "expo/fetch";
 import { API_BASE_URL, API_KEY } from "./config";
-import type { Clinic, MissionEvent, MissionRequest, Watch } from "./types";
+import type { ApplyResult, Clinic, DoctorVerification, MissionEvent, MissionRequest, PatientInfo, Watch, WatchAlert } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -11,10 +11,18 @@ export class ApiError extends Error {
   }
 }
 
+// owner-only unlock for the public deployment (same as the website's localStorage key).
+// it's typed in on the How it works tab and kept on the phone, never baked into the app
+let adminKey = "";
+export function setAdminKey(key: string) {
+  adminKey = key.trim();
+}
+
 function headers(json = true): Record<string, string> {
   const h: Record<string, string> = {};
   if (json) h["Content-Type"] = "application/json";
   if (API_KEY) h["X-API-Key"] = API_KEY;
+  if (adminKey) h["X-Admin-Key"] = adminKey;
   return h;
 }
 
@@ -114,14 +122,26 @@ export const api = {
   health: () => request<{ status: string; public_demo: boolean }>("GET", "/health"),
   missionStream: (body: MissionRequest, onEvent: (e: MissionEvent) => void, signal?: AbortSignal) =>
     streamPost("/api/mission/stream", body, onEvent, signal),
+  apply: (waitlistUrl: string, patientInfo: PatientInfo) =>
+    request<ApplyResult>("POST", "/api/apply", { body: { waitlist_url: waitlistUrl, patient_info: patientInfo } }),
+  verifyDoctor: (doctorName: string, city: string) =>
+    request<DoctorVerification>("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),
   addWatch: (clinic: Pick<Clinic, "name" | "url" | "status">, userEmail: string) =>
     request("POST", "/api/watch", {
       body: { clinic_name: clinic.name, url: clinic.url, last_status: clinic.status, user_email: userEmail },
     }),
   listWatches: (userEmail?: string) =>
     request<{ watched_clinics: Watch[] }>("GET", "/api/watch", { query: { user_email: userEmail } }),
+  checkWatches: (userEmail?: string) =>
+    request<{ checked: number; failed: number; alerts: WatchAlert[] }>("POST", "/api/watch/check", { query: { user_email: userEmail } }),
+  deleteWatch: (id: number, userEmail: string) =>
+    request<{ deleted: boolean; id: number }>("DELETE", `/api/watch/${id}`, { query: { user_email: userEmail } }),
+  watchAlerts: (userEmail?: string, limit = 20) =>
+    request<{ alerts: WatchAlert[] }>("GET", "/api/watch/alerts", { query: { user_email: userEmail, limit } }),
+  simulateOpening: (watchId?: number) =>
+    request<{ alert: WatchAlert }>("POST", "/api/watch/simulate-opening", { body: watchId ? { watch_id: watchId } : {} }),
   refreshClinic: (url: string, city: string, postalCode?: string) =>
-    request<{ clinic: Clinic; method: string; status_changed?: boolean; error?: string }>("POST", "/api/clinics/refresh", {
+    request<{ clinic: Clinic; method: string; status_changed?: boolean; error?: string | null }>("POST", "/api/clinics/refresh", {
       body: { url, city, user_postal_code: postalCode || null },
     }),
 };

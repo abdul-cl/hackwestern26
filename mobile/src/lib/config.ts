@@ -48,3 +48,6 @@ export const DEFAULT_SEARCH: Search = {
 export const MAX_CLINICS = 25;
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];
+
+// downtown London, ON, used until clinics with coordinates come in
+export const DEFAULT_MAP_CENTER = { latitude: 42.9849, longitude: -81.2453 };

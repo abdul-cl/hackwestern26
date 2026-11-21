@@ -1,17 +1,20 @@
-// Home tab: quick intro and two ways in (real search or the instant demo)
+// Home tab: the hero (headline + pulse line) and two ways in, real search or the instant demo
 import { router } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Ionicons, type IconName } from "@/components/ui";
+import { PulseLine, SplitWords } from "@/components/motion";
+import { Button, Ionicons, T, type IconName } from "@/components/ui";
 import { API_BASE_URL } from "@/lib/config";
-import { colors } from "@/lib/theme";
+import { colors, fonts, radius } from "@/lib/theme";
 import { useAppState } from "@/state/AppState";
 
-const FEATURES: { icon: IconName; title: string; text: string }[] = [
-  { icon: "map-outline", title: "Finds the clinics", text: "Searches your city for family practices." },
-  { icon: "hardware-chip-outline", title: "Reads every website", text: "AI agents check who's taking new patients." },
-  { icon: "sparkles-outline", title: "Ranks them for you", text: "Sorted by your coverage, language and distance." },
-  { icon: "notifications-outline", title: "Watches full clinics", text: "Get an alert when one starts accepting again." },
+// what a search actually does, in order (so the numbers mean something)
+const STEPS: { icon: IconName; title: string; text: string }[] = [
+  { icon: "compass-outline", title: "Finds clinics near you", text: "From the CareScout database, plus a web search if your city needs more." },
+  { icon: "globe-outline", title: "Reads each clinic's website", text: "Checks whether they're accepting, have a waitlist, or are full." },
+  { icon: "podium-outline", title: "Ranks them for you", text: "By your coverage, language and distance, with a call script when there's no form." },
+  { icon: "notifications-outline", title: "Watches the full ones", text: "Add your email and you'll get an alert when one opens up." },
 ];
 
 export default function HomeScreen() {
@@ -27,49 +30,61 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.page}>
-        <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Ionicons name="medkit" size={18} color={colors.white} />
+        <View style={styles.hero}>
+          <View style={styles.brand}>
+            <Ionicons name="pulse" size={18} color={colors.pulse} />
+            <T style={styles.brandText}>CareScout</T>
           </View>
-          <Text style={styles.brandText}>CareScout</Text>
+
+          <SplitWords text="Find a family doctor who's taking new patients." style={styles.heroText} delay={150} />
+
+          <Animated.View entering={FadeIn.delay(700).duration(500)}>
+            <T style={styles.heroSub}>
+              Agents check every clinic website in your city and rank the ones that fit you. London, Ontario for now.
+            </T>
+          </Animated.View>
+
+          {/* the signature: one heartbeat trace that draws itself in */}
+          <PulseLine live={false} height={56} style={{ marginHorizontal: -22, marginVertical: 4 }} />
+
+          <View style={{ gap: 10 }}>
+            <Button title="Start a search" icon="search" variant="light" onPress={() => router.navigate("/find")} />
+            <Button title="Watch a demo search" icon="play" variant="outlineLight" onPress={runDemo} />
+          </View>
         </View>
 
-        <Text style={styles.hero}>Find a family doctor who's actually taking patients.</Text>
-        <Text style={styles.sub}>
-          CareScout sends AI agents to check clinic websites across your city, then ranks the ones that fit you.
-        </Text>
-
-        <View style={{ gap: 10 }}>
-          <Button title="Find a doctor" icon="search" onPress={() => router.navigate("/find")} />
-          <Button title="Watch a demo search" icon="play-circle-outline" variant="secondary" onPress={runDemo} />
+        <View style={{ gap: 4 }}>
+          <T variant="label">What happens when you search</T>
         </View>
 
-        <View style={{ gap: 10 }}>
-          {FEATURES.map((f) => (
-            <Card key={f.title} style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <Ionicons name={f.icon} size={20} color={colors.pine600} />
+        <View style={styles.steps}>
+          {STEPS.map((s, i) => (
+            <View key={s.title} style={styles.step}>
+              <View style={styles.rail}>
+                <View style={styles.stepDot}>
+                  <T style={styles.stepNum}>{i + 1}</T>
+                </View>
+                {i < STEPS.length - 1 && <View style={styles.railLine} />}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureText}>{f.text}</Text>
+              <View style={styles.stepBody}>
+                <View style={styles.stepHead}>
+                  <Ionicons name={s.icon} size={16} color={colors.pine} />
+                  <T variant="title">{s.title}</T>
+                </View>
+                <T variant="small">{s.text}</T>
               </View>
-            </Card>
+            </View>
           ))}
         </View>
 
         {/* handy while testing: shows which backend the app is talking to */}
         <View style={styles.backend}>
           <View
-            style={[
-              styles.backendDot,
-              { backgroundColor: backendUp == null ? colors.slate400 : backendUp ? "#10b981" : "#ef4444" },
-            ]}
+            style={[styles.backendDot, { backgroundColor: backendUp == null ? colors.faint : backendUp ? colors.pine : colors.coral }]}
           />
-          <Text style={styles.backendText}>
-            {backendUp == null ? "Checking backend..." : backendUp ? "Connected to " : "Can't reach "}
-            {backendUp != null && API_BASE_URL}
-          </Text>
+          <T variant="mono" style={{ flexShrink: 1 }}>
+            {backendUp == null ? "checking backend..." : `${backendUp ? "connected" : "can't reach"} · ${API_BASE_URL}`}
+          </T>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -77,17 +92,29 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 20, gap: 20, paddingBottom: 40 },
+  page: { padding: 16, gap: 20, paddingBottom: 40 },
+  hero: { backgroundColor: colors.pineDeep, borderRadius: radius.lg + 4, padding: 22, gap: 14, overflow: "hidden" },
   brand: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logo: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.pine600, alignItems: "center", justifyContent: "center" },
-  brandText: { fontSize: 18, fontWeight: "800", color: colors.ink },
-  hero: { fontSize: 30, fontWeight: "800", color: colors.ink, lineHeight: 36, letterSpacing: -0.5 },
-  sub: { fontSize: 16, color: colors.slate600, lineHeight: 23 },
-  feature: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
-  featureIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.pine50, alignItems: "center", justifyContent: "center" },
-  featureTitle: { fontSize: 15, fontWeight: "700", color: colors.ink },
-  featureText: { fontSize: 13, color: colors.slate500, marginTop: 2 },
-  backend: { flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" },
-  backendDot: { width: 8, height: 8, borderRadius: 4 },
-  backendText: { fontSize: 12, color: colors.slate500 },
+  brandText: { fontFamily: fonts.displayMid, fontSize: 17, color: colors.white },
+  heroText: { fontFamily: fonts.display, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: colors.white },
+  heroSub: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: "#B9D6CC" },
+  steps: { gap: 0 },
+  step: { flexDirection: "row", gap: 14 },
+  rail: { alignItems: "center", width: 28 },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNum: { fontFamily: fonts.mono, fontSize: 12, color: colors.pine },
+  railLine: { width: 1, flex: 1, backgroundColor: colors.line, marginVertical: 4 },
+  stepBody: { flex: 1, paddingBottom: 20, gap: 3 },
+  stepHead: { flexDirection: "row", alignItems: "center", gap: 7 },
+  backend: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  backendDot: { width: 7, height: 7, borderRadius: 4 },
 });

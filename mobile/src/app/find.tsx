@@ -1,103 +1,168 @@
-// Find tab: search form, live agent feed, then the ranked clinic list
-import { useMemo } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+// Find tab: search form, live agent feed, then the map + ranked clinic list
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AgentFeed from "@/components/AgentFeed";
+import ApplySheet from "@/components/ApplySheet";
 import ClinicCard from "@/components/ClinicCard";
+import ClinicMap from "@/components/ClinicMap";
 import MissionForm from "@/components/MissionForm";
-import { Card } from "@/components/ui";
+import { Reveal } from "@/components/motion";
+import { Card, Ionicons, T } from "@/components/ui";
 import { mergeClinics } from "@/lib/clinics";
-import { colors } from "@/lib/theme";
+import { colors, fonts, radius } from "@/lib/theme";
+import type { MergedClinic } from "@/lib/types";
 import { useAppState } from "@/state/AppState";
 
 function EmptyState() {
-  const steps = [
-    ["Find the clinics", "Searches your city for family practices."],
-    ["Read every website", "Agents check who's accepting new patients."],
-    ["Rank them for you", "Sorted for your coverage, language and distance."],
-  ];
   return (
-    <Card style={{ gap: 12 }}>
-      <Text style={styles.emptyTitle}>Your results will show up here</Text>
-      <Text style={styles.emptyText}>
-        Hit Launch CareScout to start. A live search takes a few minutes, demo mode shows saved results right away.
-      </Text>
-      {steps.map(([title, text], i) => (
-        <View key={title} style={styles.emptyStep}>
-          <View style={styles.stepNum}>
-            <Text style={{ color: colors.white, fontSize: 12, fontWeight: "700" }}>{i + 1}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.stepTitle}>{title}</Text>
-            <Text style={styles.emptyText}>{text}</Text>
-          </View>
-        </View>
-      ))}
+    <Card style={{ gap: 8, alignItems: "center", paddingVertical: 26 }}>
+      <Ionicons name="pulse" size={26} color={colors.pine} />
+      <T variant="h2">Results show up here</T>
+      <T variant="small" style={{ textAlign: "center", maxWidth: 300 }}>
+        A live search takes a few minutes while agents read each clinic's website. Demo mode shows saved results right away.
+      </T>
     </Card>
   );
 }
 
 export default function FindScreen() {
-  const { search, setSearch, mission, launch, publicDemo } = useAppState();
+  const { search, setSearch, mission, launch, publicDemo, refreshWatchCount } = useAppState();
   const { state, stop, reset, updateClinic } = mission;
+  const params = useLocalSearchParams<{ demo?: string }>();
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const resultsY = useRef(0);
+  const feedY = useRef(0);
+  const cardY = useRef<Record<string, number>>({});
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  const [applyFor, setApplyFor] = useState<MergedClinic | null>(null);
+  const [showMap, setShowMap] = useState(true);
 
   const clinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
+  const hasPins = clinics.some((c) => typeof c.lat === "number" && typeof c.lng === "number");
+
+  // carescout://find?demo=1 (or /find?demo=1 on web) turns on demo mode and runs it, same as the website
+  const demoStarted = useRef(false);
+  useEffect(() => {
+    if (params.demo !== "1") {
+      demoStarted.current = false;
+      return;
+    }
+    if (!demoStarted.current) {
+      demoStarted.current = true;
+      router.setParams({ demo: undefined });
+      setSearch((s) => ({ ...s, useCache: true }));
+      if (!state.running) launch({ useCache: true });
+    }
+    // only reacts to the link itself, launch/search changing shouldn't start another demo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.demo]);
+
+  const onLaunch = () => {
+    setSelectedUrl(null);
+    launch();
+    // jump down to the live feed so you can watch it (wait a beat for it to render first)
+    setTimeout(() => scroll.current?.scrollTo({ y: Math.max(0, feedY.current - 12), animated: true }), 200);
+  };
+
+  // tapping a map pin highlights its card and scrolls to it
+  const selectFromMap = useCallback((url: string) => {
+    setSelectedUrl(url);
+    const y = cardY.current[url];
+    if (y != null) scroll.current?.scrollTo({ y: Math.max(0, resultsY.current + y - 12), animated: true });
+  }, []);
+
+  const onCardLayout = useCallback((url: string, e: LayoutChangeEvent) => {
+    cardY.current[url] = e.nativeEvent.layout.y;
+  }, []);
+
+  const onWatched = useCallback(() => refreshWatchCount(), [refreshWatchCount]);
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       {/* keeps the keyboard from covering the inputs on iOS */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-          <View>
-            <Text style={styles.h1}>Find a family doctor</Text>
-            <Text style={styles.sub}>Tell CareScout where you are and what you need.</Text>
+        <ScrollView ref={scroll} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+          <View style={{ gap: 4 }}>
+            <T variant="h1">Find a family doctor</T>
+            <T variant="small">Tell CareScout where you are and what you need. Agents check each clinic's website for you.</T>
           </View>
 
-          <MissionForm
-            values={search}
-            onChange={setSearch}
-            onLaunch={() => launch()}
-            onStop={stop}
-            running={state.running}
-            publicDemo={publicDemo}
-          />
-          <AgentFeed state={state} onStop={stop} onReset={reset} />
-
-          {clinics.length > 0 ? (
-            <View style={{ gap: 12 }}>
-              <Text style={styles.h2}>
-                {state.ranked ? "Best matches first" : "Results so far"} ({clinics.length})
-              </Text>
-              {clinics.map((c) => (
-                <ClinicCard
-                  key={c.url}
-                  clinic={c}
-                  email={search.email.trim()}
-                  city={search.city}
-                  postalCode={search.postalCode}
-                  publicDemo={publicDemo}
-                  rankingPending={state.running && !state.ranked}
-                  onUpdated={updateClinic}
-                />
-              ))}
+          <MissionForm values={search} onChange={setSearch} onLaunch={onLaunch} onStop={stop} running={state.running} publicDemo={publicDemo} />
+          {(state.running || state.log.length > 0) && (
+            <View onLayout={(e) => (feedY.current = e.nativeEvent.layout.y)}>
+              <AgentFeed state={state} onStop={stop} onReset={reset} />
             </View>
-          ) : (
-            !state.running && state.log.length === 0 && <EmptyState />
           )}
+
+          <View onLayout={(e) => (resultsY.current = e.nativeEvent.layout.y)}>
+            {clinics.length > 0 ? (
+              <View style={{ gap: 12 }}>
+                <View style={styles.resultsHead}>
+                  <T variant="h2" style={{ flex: 1 }}>
+                    {state.ranked ? "Best matches first" : "Results so far"} <T style={styles.count}>{clinics.length}</T>
+                  </T>
+                  {hasPins && (
+                    <Pressable
+                      onPress={() => setShowMap((m) => !m)}
+                      style={styles.mapToggle}
+                      accessibilityRole="button"
+                      accessibilityLabel={showMap ? "Hide map" : "Show map"}
+                      hitSlop={6}
+                    >
+                      <Ionicons name={showMap ? "list" : "map-outline"} size={15} color={colors.ink} />
+                      <T style={styles.mapToggleText}>{showMap ? "List only" : "Map"}</T>
+                    </Pressable>
+                  )}
+                </View>
+
+                {hasPins && showMap && <ClinicMap clinics={clinics} selectedUrl={selectedUrl} onSelect={selectFromMap} />}
+
+                {clinics.map((c, i) => (
+                  <Reveal key={c.url} index={i} onLayout={(e) => onCardLayout(c.url, e)}>
+                    <ClinicCard
+                      clinic={c}
+                      email={search.email.trim()}
+                      city={search.city}
+                      postalCode={search.postalCode}
+                      publicDemo={publicDemo}
+                      rankingPending={state.running && !state.ranked}
+                      selected={c.url === selectedUrl}
+                      onSelect={setSelectedUrl}
+                      onApply={setApplyFor}
+                      onUpdated={updateClinic}
+                      onWatched={onWatched}
+                    />
+                  </Reveal>
+                ))}
+              </View>
+            ) : (
+              !state.running && state.log.length === 0 && <EmptyState />
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ApplySheet clinic={applyFor} defaults={search} onClose={() => setApplyFor(null)} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, gap: 16, paddingBottom: 40 },
-  h1: { fontSize: 26, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
-  h2: { fontSize: 16, fontWeight: "700", color: colors.ink },
-  sub: { fontSize: 14, color: colors.slate500, marginTop: 4 },
-  emptyTitle: { fontSize: 17, fontWeight: "700", color: colors.ink },
-  emptyText: { fontSize: 13, color: colors.slate500, lineHeight: 18 },
-  emptyStep: { flexDirection: "row", gap: 10, backgroundColor: colors.paper, padding: 12, borderRadius: 10 },
-  stepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" },
-  stepTitle: { fontSize: 14, fontWeight: "600", color: colors.ink },
+  page: { padding: 16, gap: 16, paddingBottom: 48 },
+  resultsHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  count: { fontFamily: fonts.mono, fontSize: 15, color: colors.muted },
+  mapToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+  },
+  mapToggleText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.ink },
 });

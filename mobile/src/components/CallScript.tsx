@@ -1,9 +1,9 @@
 // For clinics with no online waitlist: phone number, hours and a script to read on the call
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Linking, StyleSheet, View } from "react-native";
 import { telHref } from "@/lib/clinics";
-import { colors } from "@/lib/theme";
+import { colors, fonts, radius } from "@/lib/theme";
 import type { MergedClinic } from "@/lib/types";
-import { Button, Ionicons } from "./ui";
+import { Button, Ionicons, T } from "./ui";
 
 export default function CallScript({ clinic }: { clinic: MergedClinic }) {
   return (
@@ -13,31 +13,34 @@ export default function CallScript({ clinic }: { clinic: MergedClinic }) {
           small
           icon="call"
           title={`Call ${clinic.phone_number}`}
-          onPress={() => Linking.openURL(telHref(clinic.phone_number!))}
+          onPress={() => Linking.openURL(telHref(clinic.phone_number!)).catch(() => {})}
           style={{ alignSelf: "flex-start" }}
         />
       ) : (
-        <Text style={styles.muted}>No phone number listed on the clinic's site.</Text>
+        <T variant="small">No phone number listed on the clinic's site.</T>
       )}
       {clinic.call_hours && (
         <View style={styles.hours}>
-          <Ionicons name="time-outline" size={14} color={colors.slate600} />
-          <Text style={{ color: colors.slate600, fontSize: 13, flex: 1 }}>{clinic.call_hours}</Text>
+          <Ionicons name="time-outline" size={14} color={colors.muted} />
+          <T variant="small" style={{ flex: 1 }}>{clinic.call_hours}</T>
         </View>
       )}
       {clinic.call_script ? (
-        // selectable so people can long-press and copy it
-        <Text selectable style={styles.script}>{clinic.call_script}</Text>
+        <View style={styles.script}>
+          <T variant="label">What to say</T>
+          {/* selectable so people can long-press and copy it. RN Text keeps \n line breaks like pre-line */}
+          <T selectable style={styles.scriptText}>{clinic.call_script}</T>
+        </View>
       ) : (
-        <Text style={styles.muted}>No call script for this clinic.</Text>
+        <T variant="small">No call script for this clinic.</T>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  box: { marginTop: 12, gap: 10, padding: 12, borderRadius: 10, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.slate200 },
+  box: { gap: 10, padding: 14, borderRadius: radius.md, backgroundColor: colors.mist },
   hours: { flexDirection: "row", alignItems: "center", gap: 6 },
-  script: { backgroundColor: colors.white, padding: 12, borderRadius: 8, color: colors.slate700, fontSize: 14, lineHeight: 20 },
-  muted: { color: colors.slate500, fontSize: 13 },
+  script: { backgroundColor: colors.white, padding: 14, borderRadius: radius.sm, gap: 6, borderWidth: 1, borderColor: colors.line },
+  scriptText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.ink },
 });

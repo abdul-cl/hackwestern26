@@ -31,9 +31,25 @@ to something it can reach (a cloudflared tunnel or the deployed Railway URL). Re
 - `src/hooks/useMission.ts` runs the live search stream
 - `src/state/AppState.tsx` search + mission shared between tabs
 
-## Done / next
+## What it has (same features as the website)
 
-- [x] Tabs, API layer, Find screen with live mission feed, clinic cards, call script, watch + re-check
-- [ ] Auto-Fill waitlist + Verify Doctor
-- [ ] Map (react-native-maps, list fallback on web)
-- [ ] Watchdog tab (watch list, alerts, simulate opening)
+- Find: search form, live agent feed, map with status pins (tap a pin to jump to its card), ranked clinic cards,
+  call scripts, Auto-fill waitlist (stops before Submit, you review it), Verify doctor (CPSO), Re-check, Watch clinic
+- Watchdog: your watch list, Check all now, stop watching, recent alerts, Simulate opening (demo)
+- Opening alert banner, watch count badge on the Watchdog tab, dot on the Find tab while a search runs
+- How it works: the four agents, reading results, privacy + safety, FAQ, owner key for the public deployment
+- `carescout://find?demo=1` (or `/find?demo=1` on web) starts the demo search
+
+## Design + motion
+
+Fonts match the website (Bricolage Grotesque + Instrument Sans, JetBrains Mono for numbers/logs).
+Animations use Reanimated (GSAP / React Bits / Lenis are web-only, so their effects are recreated natively):
+the pulse line, word-by-word headline, staggered cards, count-up stats, score rings, springy buttons.
+Same rule as the site: one hero moment, everything else only moves after you do something. Reduce motion is respected.
+
+## Checks before pushing
+
+```powershell
+npx tsc --noEmit
+npx expo lint
+```

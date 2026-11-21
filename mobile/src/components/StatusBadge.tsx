@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { STATUS_STYLE, displayStatus, type DisplayStatus } from "@/lib/clinics";
+import { fonts } from "@/lib/theme";
 import type { Clinic } from "@/lib/types";
 
 export default function StatusBadge({ clinic, status }: { clinic?: Partial<Clinic>; status?: DisplayStatus }) {
@@ -19,10 +20,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     gap: 6,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: 999,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  text: { fontSize: 12, fontWeight: "600" },
+  text: { fontFamily: fonts.bodySemi, fontSize: 12 },
 });

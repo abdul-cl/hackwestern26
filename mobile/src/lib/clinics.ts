@@ -15,13 +15,13 @@ export function displayStatus(clinic: Partial<Clinic>): DisplayStatus {
   return (clinic.status as DisplayStatus) || "unknown";
 }
 
-// same colours as the website badges
+// status colours. dot = map pin + badge dot, bg/text = the badge itself
 export const STATUS_STYLE: Record<DisplayStatus, { label: string; dot: string; bg: string; text: string }> = {
-  accepting: { label: "Accepting", dot: "#10b981", bg: "#ecfdf5", text: "#047857" },
-  waitlist: { label: "Waitlist Open", dot: "#f59e0b", bg: "#fffbeb", text: "#b45309" },
-  closed: { label: "Not Accepting", dot: "#ef4444", bg: "#fff1f2", text: "#be123c" },
-  unknown: { label: "Couldn't check", dot: "#94a3b8", bg: "#f1f5f9", text: "#475569" },
-  expired: { label: "Needs a re-check", dot: "#a8a29e", bg: "#f5f5f4", text: "#44403c" },
+  accepting: { label: "Accepting", dot: "#14A06F", bg: "#E4F4EC", text: "#0B5A44" },
+  waitlist: { label: "Waitlist open", dot: "#E39B2D", bg: "#FCF1DF", text: "#8A5410" },
+  closed: { label: "Not accepting", dot: "#D6404A", bg: "#FDECEC", text: "#9B2730" },
+  unknown: { label: "Couldn't check", dot: "#93A39E", bg: "#EEF2F0", text: "#4A5A55" },
+  expired: { label: "Needs a re-check", dot: "#A8A29E", bg: "#F3F1EF", text: "#57524D" },
 };
 
 // joins scan results with ranking results. ranked ones go first (best score first),

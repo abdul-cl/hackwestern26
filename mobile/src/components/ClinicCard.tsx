@@ -1,24 +1,15 @@
 // One clinic result: status, why it was ranked there, and what you can do next
 import { memo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { api } from "@/lib/api";
 import { checkedLabel, displayStatus, hostOf, isFailedScan, lastSeenLabel } from "@/lib/clinics";
-import { colors, radius } from "@/lib/theme";
+import { colors, fonts, radius } from "@/lib/theme";
 import type { Clinic, MergedClinic } from "@/lib/types";
 import CallScript from "./CallScript";
+import { ScoreRing } from "./motion";
 import StatusBadge from "./StatusBadge";
-import { Button, Card, Ionicons, Pill } from "./ui";
-
-// match score in a coloured circle (green is good, red is a poor fit)
-function Score({ score }: { score?: number }) {
-  if (score == null) return null;
-  const c = score >= 70 ? colors.pine500 : score >= 40 ? colors.amber : colors.rose;
-  return (
-    <View style={[styles.score, { borderColor: c }]}>
-      <Text style={styles.scoreText}>{score}</Text>
-    </View>
-  );
-}
+import { Button, Card, Ionicons, Pill, T } from "./ui";
+import VerifyDoctor from "./VerifyDoctor";
 
 type Props = {
   clinic: MergedClinic;
@@ -27,11 +18,18 @@ type Props = {
   postalCode: string;
   publicDemo: boolean;
   rankingPending: boolean; // true while the mission is still running and hasn't ranked yet
+  selected: boolean;
+  onSelect: (url: string) => void;
+  onApply: (c: MergedClinic) => void;
   onUpdated: (c: Clinic) => void;
+  onWatched: () => void;
 };
 
-function ClinicCard({ clinic, email, city, postalCode, publicDemo, rankingPending, onUpdated }: Props) {
-  const [showCall, setShowCall] = useState(false);
+type Panel = "call" | "verify" | null;
+
+function ClinicCard(props: Props) {
+  const { clinic, email, city, postalCode, publicDemo, rankingPending, selected, onSelect, onApply, onUpdated, onWatched } = props;
+  const [panel, setPanel] = useState<Panel>(null);
   const [recheck, setRecheck] = useState<{ loading: boolean; note?: string; error?: string }>({ loading: false });
   const [watch, setWatch] = useState<{ loading: boolean; done: boolean; error?: string; askEmail: boolean }>({
     loading: false,
@@ -46,6 +44,8 @@ function ClinicCard({ clinic, email, city, postalCode, publicDemo, rankingPendin
   const lastSeen = lastSeenLabel(clinic);
   const host = hostOf(clinic.url);
   const isWeb = /^https?:\/\//.test(clinic.url);
+  const toggle = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
+  const open = (url: string) => Linking.openURL(url).catch(() => {});
 
   // check just this clinic again (quick page read, or a browser agent if the site needs it)
   const recheckNow = async () => {
@@ -74,154 +74,191 @@ function ClinicCard({ clinic, email, city, postalCode, publicDemo, rankingPendin
     try {
       await api.addWatch({ name: clinic.name, url: clinic.url, status: clinic.status }, userEmail);
       setWatch({ loading: false, done: true, askEmail: false });
+      onWatched();
     } catch (e: any) {
       setWatch({ loading: false, done: false, error: e.message, askEmail: true });
     }
   };
 
   return (
-    <Card style={{ gap: 10 }}>
-      <View style={styles.top}>
-        <Score score={clinic.score} />
-        <View style={{ flex: 1, gap: 6 }}>
-          <Text style={styles.name} numberOfLines={2}>{failed ? host : clinic.name}</Text>
-          <StatusBadge clinic={clinic} />
-        </View>
-      </View>
-
-      <View style={styles.meta}>
-        {clinic.distance_km != null && (
-          <View style={styles.metaItem}>
-            <Ionicons name="location-outline" size={13} color={colors.slate500} />
-            <Text style={styles.metaText}>{clinic.distance_km} km away</Text>
+    <Pressable onPress={() => onSelect(clinic.url)} accessibilityLabel={`${failed ? host : clinic.name}, ${status}`}>
+        <Card style={[styles.card, selected && styles.cardOn]}>
+          <View style={styles.top}>
+            {clinic.score != null && <ScoreRing score={clinic.score} />}
+            <View style={{ flex: 1, gap: 7 }}>
+              <T variant="title" numberOfLines={2}>{failed ? host : clinic.name}</T>
+              <StatusBadge clinic={clinic} />
+            </View>
           </View>
-        )}
-        {clinic.address && <Text style={styles.metaText} numberOfLines={1}>{clinic.address}</Text>}
-        {isWeb && (
-          <Pressable onPress={() => Linking.openURL(clinic.url)} style={styles.metaItem} hitSlop={4}>
-            <Text style={[styles.metaText, { color: colors.pine700 }]}>{host}</Text>
-            <Ionicons name="open-outline" size={12} color={colors.pine700} />
-          </Pressable>
-        )}
-      </View>
 
-      {!!clinic.coverage_tags?.length && (
-        <View style={styles.tags}>
-          {clinic.coverage_tags.map((t) => <Pill key={t} text={t} bg="#f0f9ff" color="#0369a1" />)}
-        </View>
-      )}
+          <View style={styles.meta}>
+            {clinic.distance_km != null && (
+              <View style={styles.metaItem}>
+                <Ionicons name="navigate-outline" size={12} color={colors.muted} />
+                <T style={styles.metaMono}>{clinic.distance_km} km</T>
+              </View>
+            )}
+            {clinic.address && <T variant="small" numberOfLines={1} style={{ flexShrink: 1 }}>{clinic.address}</T>}
+          </View>
 
-      {failed ? (
-        <Text style={styles.body}>We couldn't check this clinic's website automatically. Visit the site or call them directly.</Text>
-      ) : (
-        <View style={{ gap: 8 }}>
-          {!!clinic.reason && <Text style={styles.body}>{clinic.reason}</Text>}
-          {!!clinic.next_step && (
-            <Text style={styles.nextStep}>
-              <Text style={{ color: colors.slate500, fontWeight: "400" }}>Next step: </Text>
-              {clinic.next_step}
-            </Text>
-          )}
-          {clinic.requirements?.map((r) => (
-            <Text key={r} style={styles.req}>• {r}</Text>
-          ))}
-          {!!clinic.evidence_quote && (
-            <View style={styles.quote}>
-              <Ionicons name="chatbox-ellipses-outline" size={14} color={colors.slate400} />
-              <Text style={styles.quoteText}>{clinic.evidence_quote}</Text>
+          {!!clinic.coverage_tags?.length && (
+            <View style={styles.tags}>
+              {clinic.coverage_tags.map((t) => <Pill key={t} text={t} bg={colors.skySoft} color={colors.sky} />)}
             </View>
           )}
-          {!clinic.ranked && rankingPending && <Text style={styles.small}>Ranking pending...</Text>}
-        </View>
-      )}
 
-      {lastSeen && <Text style={styles.lastSeen}>{lastSeen}</Text>}
-      {(checked || recheck.note || recheck.error) && (
-        <View style={{ gap: 2 }}>
-          {checked && <Text style={styles.small}>{checked}</Text>}
-          {recheck.note && <Text style={[styles.small, { color: colors.pine700 }]}>{recheck.note}</Text>}
-          {recheck.error && <Text style={[styles.small, { color: colors.rose }]}>{recheck.error}</Text>}
-        </View>
-      )}
-
-      <View style={styles.actions}>
-        {clinic.waitlist_url ? (
-          // auto-fill comes in the next phase, for now this just opens the waitlist page
-          <Button small icon="document-text-outline" title="Open waitlist" onPress={() => Linking.openURL(clinic.waitlist_url!)} />
-        ) : (
-          !failed && (
-            <Button
-              small
-              variant="secondary"
-              icon="call-outline"
-              title={showCall ? "Hide call script" : "Call script"}
-              onPress={() => setShowCall((s) => !s)}
-            />
-          )
-        )}
-        {!publicDemo && isWeb && (
-          <Button small variant="ghost" icon="refresh" title={recheck.loading ? "Checking..." : "Re-check"} loading={recheck.loading} onPress={recheckNow} />
-        )}
-        {status === "closed" &&
-          (watch.done ? (
-            <View style={styles.watching}>
-              <Ionicons name="checkmark" size={15} color={colors.pine700} />
-              <Text style={{ color: colors.pine700, fontWeight: "600", fontSize: 13 }}>Watching</Text>
-            </View>
+          {failed ? (
+            <T variant="body" style={{ color: colors.muted }}>
+              We couldn't check this clinic's website automatically. Visit the site or call them directly.
+            </T>
           ) : (
-            <Button small variant="secondary" icon="notifications-outline" title="Watch clinic" loading={watch.loading} onPress={startWatch} />
-          ))}
-      </View>
+            <View style={{ gap: 8 }}>
+              {!!clinic.reason && <T variant="body">{clinic.reason}</T>}
+              {!!clinic.next_step && (
+                <View style={styles.next}>
+                  <Ionicons name="arrow-forward-circle" size={16} color={colors.pine} style={{ marginTop: 2 }} />
+                  <T variant="bodyStrong" style={{ flex: 1, color: colors.pineDeep }}>{clinic.next_step}</T>
+                </View>
+              )}
+              {clinic.requirements?.map((r) => (
+                <T key={r} variant="small">· {r}</T>
+              ))}
+              {!!clinic.evidence_quote && (
+                // the exact sentence from the clinic's site, so people can see why it got this status
+                <View style={styles.quote}>
+                  <T style={styles.quoteText}>"{clinic.evidence_quote}"</T>
+                  <T variant="small" style={{ fontSize: 11 }}>from {host}</T>
+                </View>
+              )}
+              {!clinic.ranked && rankingPending && <T variant="small">Ranking...</T>}
+            </View>
+          )}
 
-      {watch.askEmail && !email && (
-        <View style={styles.emailRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email for opening alerts"
-            value={watchEmail}
-            onChangeText={setWatchEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            onSubmitEditing={startWatch}
-          />
-          <Button small title="Watch" onPress={startWatch} />
-        </View>
-      )}
-      {watch.error && <Text style={[styles.small, { color: colors.rose }]}>{watch.error}</Text>}
+          {lastSeen && <T style={styles.lastSeen}>{lastSeen}</T>}
+          {(checked || recheck.note || recheck.error) && (
+            <View style={{ gap: 2 }}>
+              {checked && <T variant="mono" style={{ fontSize: 11 }}>{checked.toLowerCase()}</T>}
+              {recheck.note && <T variant="small" style={{ color: colors.pine }}>{recheck.note}</T>}
+              {recheck.error && <T variant="small" style={{ color: colors.coral }}>{recheck.error}</T>}
+            </View>
+          )}
 
-      {showCall && <CallScript clinic={clinic} />}
-    </Card>
+          {/* main action first and full width, so it's easy to hit with a thumb */}
+          <View style={{ gap: 8 }}>
+            {clinic.waitlist_url ? (
+              <Button icon="create-outline" title="Auto-fill waitlist" onPress={() => onApply(clinic)} />
+            ) : (
+              !failed && (
+                <Button
+                  variant={panel === "call" ? "secondary" : "primary"}
+                  icon="call-outline"
+                  title={panel === "call" ? "Hide call script" : "Call script"}
+                  onPress={() => toggle("call")}
+                />
+              )
+            )}
+            {failed && isWeb && <Button icon="open-outline" title="Visit the site" onPress={() => open(clinic.url)} />}
+
+            <View style={styles.actions}>
+              <Chip icon="shield-checkmark-outline" text="Verify doctor" on={panel === "verify"} onPress={() => toggle("verify")} />
+              {isWeb && !failed && <Chip icon="open-outline" text="Website" onPress={() => open(clinic.url)} />}
+              {!publicDemo && isWeb && (
+                <Chip icon="refresh" text={recheck.loading ? "Checking..." : "Re-check"} onPress={recheckNow} disabled={recheck.loading} />
+              )}
+              {status === "closed" &&
+                (watch.done ? (
+                  <View style={styles.watching}>
+                    <Ionicons name="checkmark-circle" size={15} color={colors.pine} />
+                    <T style={{ fontFamily: fonts.bodySemi, fontSize: 13, color: colors.pine }}>Watching</T>
+                  </View>
+                ) : (
+                  <Chip icon="notifications-outline" text={watch.loading ? "Adding..." : "Watch clinic"} onPress={startWatch} disabled={watch.loading} />
+                ))}
+            </View>
+          </View>
+
+          {watch.askEmail && !email && (
+            <View style={styles.emailRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Email for opening alerts"
+                placeholderTextColor={colors.faint}
+                value={watchEmail}
+                onChangeText={setWatchEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={startWatch}
+                accessibilityLabel="Email for opening alerts"
+              />
+              <Button small title="Watch" onPress={startWatch} />
+            </View>
+          )}
+          {watch.error && <T variant="small" style={{ color: colors.coral }}>{watch.error}</T>}
+
+          {panel === "call" && <CallScript clinic={clinic} />}
+          {panel === "verify" && <VerifyDoctor city={city} />}
+        </Card>
+    </Pressable>
+  );
+}
+
+// small outline button for the secondary actions
+function Chip({ icon, text, onPress, on, disabled }: { icon: any; text: string; onPress: () => void; on?: boolean; disabled?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={text}
+      accessibilityState={{ disabled: !!disabled, expanded: on }}
+      style={({ pressed }) => [styles.chip, on && styles.chipOn, (pressed || disabled) && { opacity: 0.6 }]}
+    >
+      <Ionicons name={icon} size={14} color={on ? colors.white : colors.ink} />
+      <T style={[styles.chipText, on && { color: colors.white }]}>{text}</T>
+    </Pressable>
   );
 }
 
 export default memo(ClinicCard);
 
 const styles = StyleSheet.create({
-  top: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  score: { width: 46, height: 46, borderRadius: 23, borderWidth: 4, alignItems: "center", justifyContent: "center" },
-  scoreText: { fontWeight: "700", color: colors.ink, fontSize: 14 },
-  name: { fontSize: 16, fontWeight: "700", color: colors.ink },
-  meta: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 3 },
-  metaText: { fontSize: 12, color: colors.slate500 },
+  card: { gap: 12 },
+  cardOn: { borderColor: colors.pine, borderWidth: 2, margin: -1 },
+  top: { flexDirection: "row", gap: 14, alignItems: "center" },
+  meta: { flexDirection: "row", alignItems: "center", gap: 10 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaMono: { fontFamily: fonts.mono, fontSize: 12, color: colors.ink },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  body: { fontSize: 14, color: colors.slate700, lineHeight: 20 },
-  nextStep: { fontSize: 14, color: colors.pine900, fontWeight: "600", lineHeight: 20 },
-  req: { fontSize: 12, color: colors.slate600, lineHeight: 17 },
-  quote: { flexDirection: "row", gap: 6, backgroundColor: colors.paper, padding: 8, borderRadius: 8 },
-  quoteText: { flex: 1, fontSize: 12, fontStyle: "italic", color: colors.slate600, lineHeight: 17 },
-  small: { fontSize: 12, color: colors.slate400 },
-  lastSeen: { fontSize: 12, color: "#44403c", backgroundColor: "#fafaf9", padding: 8, borderRadius: 8 },
+  next: { flexDirection: "row", gap: 6 },
+  quote: { borderLeftWidth: 3, borderLeftColor: colors.pulse, paddingLeft: 10, paddingVertical: 2, gap: 2 },
+  quoteText: { fontFamily: fonts.body, fontStyle: "italic", fontSize: 13, lineHeight: 19, color: colors.muted },
+  lastSeen: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: "#57524D", backgroundColor: "#F3F1EF", padding: 10, borderRadius: radius.sm },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  watching: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+  },
+  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.ink },
+  watching: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6 },
   emailRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.slate200,
+    borderColor: colors.line,
     borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontFamily: fonts.body,
+    color: colors.ink,
   },
 });
