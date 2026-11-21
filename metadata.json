@@ -3,13 +3,32 @@
   "checkpoint_id": "01M7ZP25BPXD0D2GGDZZBPJ0Q1",
   "strategy": "manual-commit",
   "branch": "Abdul/frontend",
-  "checkpoints_count": 6,
+  "checkpoints_count": 9,
   "files_touched": [
+    ".gitignore",
+    ".idea/workspace.xml",
+    "CLAUDE.md",
+    "DEPLOY.md",
     "backend/app/__pycache__/__init__.cpython-315.pyc",
+    "backend/app/__pycache__/agents.cpython-315.pyc",
     "backend/app/__pycache__/apply_form.cpython-315.pyc",
+    "backend/app/__pycache__/cache.cpython-315.pyc",
+    "backend/app/__pycache__/common.cpython-315.pyc",
+    "backend/app/__pycache__/config.cpython-315.pyc",
     "backend/app/__pycache__/cpso.cpython-315.pyc",
+    "backend/app/__pycache__/discovery.cpython-315.pyc",
     "backend/app/__pycache__/geo.cpython-315.pyc",
+    "backend/app/__pycache__/main.cpython-315.pyc",
     "backend/app/__pycache__/models.cpython-315.pyc",
+    "backend/app/__pycache__/orchestrator.cpython-315.pyc",
+    "backend/app/__pycache__/ranking.cpython-315.pyc",
+    "backend/app/__pycache__/scanning.cpython-315.pyc",
+    "backend/app/__pycache__/watch_api.cpython-315.pyc",
+    "backend/app/__pycache__/watchdog.cpython-315.pyc",
+    "backend/app/config.py",
+    "backend/app/main.py",
+    "backend/tests/test_public.py",
+    "backend/tests/test_security.py",
     "frontend/.env.example",
     "frontend/vercel.json",
     "render.yaml"
@@ -21,18 +40,32 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 15894,
+    "cache_read_tokens": 9407007,
+    "output_tokens": 9340,
+    "api_call_count": 14
+  },
   "redaction": {
-    "replacements": 201,
+    "replacements": 504,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 76,
+      "credential_value": 182,
       "credentialed_uri": 0,
-      "entropy": 71,
-      "key_context": 54,
+      "entropy": 230,
+      "key_context": 92,
       "provider_token": 0,
       "shell_stdin": 0
     }
