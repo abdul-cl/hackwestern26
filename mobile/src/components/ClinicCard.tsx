@@ -1,8 +1,9 @@
 // One clinic result: status, why it was ranked there, and what you can do next
 import { memo, useState } from "react";
-import { Linking, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Linking, Platform, Pressable, Share, StyleSheet, TextInput, View } from "react-native";
 import { api } from "@/lib/api";
 import { checkedLabel, displayStatus, hostOf, isFailedScan, lastSeenLabel } from "@/lib/clinics";
+import { canGetDirections, directionsUrl, shareText } from "@/lib/device";
 import { colors, fonts, radius } from "@/lib/theme";
 import type { Clinic, MergedClinic } from "@/lib/types";
 import CallScript from "./CallScript";
@@ -37,6 +38,7 @@ function ClinicCard(props: Props) {
     askEmail: false,
   });
   const [watchEmail, setWatchEmail] = useState("");
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   const failed = isFailedScan(clinic);
   const status = displayStatus(clinic);
@@ -61,6 +63,26 @@ function ClinicCard(props: Props) {
       setRecheck({ loading: false, note });
     } catch (e: any) {
       setRecheck({ loading: false, error: e.message });
+    }
+  };
+
+  // phone share sheet (texts, WhatsApp, email...). browsers without a share sheet get it copied instead
+  const share = async () => {
+    const message = shareText(clinic);
+    setShareNote(null);
+    try {
+      await Share.share({ message, title: clinic.name });
+    } catch {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(message);
+          setShareNote("Copied, paste it anywhere to share.");
+          return;
+        } catch {
+          // fall through to the message below
+        }
+      }
+      setShareNote("Couldn't open the share menu on this device.");
     }
   };
 
@@ -161,6 +183,8 @@ function ClinicCard(props: Props) {
 
             <View style={styles.actions}>
               <Chip icon="shield-checkmark-outline" text="Verify doctor" on={panel === "verify"} onPress={() => toggle("verify")} />
+              {canGetDirections(clinic) && <Chip icon="navigate-outline" text="Directions" onPress={() => open(directionsUrl(clinic))} />}
+              {!failed && <Chip icon="share-outline" text="Share" onPress={share} />}
               {isWeb && !failed && <Chip icon="open-outline" text="Website" onPress={() => open(clinic.url)} />}
               {!publicDemo && isWeb && (
                 <Chip icon="refresh" text={recheck.loading ? "Checking..." : "Re-check"} onPress={recheckNow} disabled={recheck.loading} />
@@ -195,6 +219,7 @@ function ClinicCard(props: Props) {
             </View>
           )}
           {watch.error && <T variant="small" style={{ color: colors.coral }}>{watch.error}</T>}
+          {shareNote && <T variant="small" style={{ color: colors.pine }}>{shareNote}</T>}
 
           {panel === "call" && <CallScript clinic={clinic} />}
           {panel === "verify" && <VerifyDoctor city={city} />}

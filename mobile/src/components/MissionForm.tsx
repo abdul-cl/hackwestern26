@@ -1,7 +1,10 @@
 // The search form at the top of the Find tab
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
+import * as Location from "expo-location";
+import * as Haptics from "expo-haptics";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
 import { COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS, type Search } from "@/lib/config";
+import { cityLabel, formatPostal } from "@/lib/device";
 import { colors, fonts, radius } from "@/lib/theme";
 import { Button, Card, ChipSelect, Ionicons, Label, T } from "./ui";
 
@@ -18,6 +21,41 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
   const [showMore, setShowMore] = useState(false);
   const set = <K extends keyof Search>(key: K) => (v: Search[K]) => onChange({ ...values, [key]: v });
   const savedOnly = publicDemo || values.useCache;
+  const [locating, setLocating] = useState(false);
+  const [locNote, setLocNote] = useState<{ text: string; error?: boolean } | null>(null);
+
+  // GPS -> postal code + city. reverse geocoding only exists on iOS/Android so the button is hidden on web
+  const useMyLocation = async () => {
+    setLocating(true);
+    setLocNote(null);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.status !== "granted") {
+        setLocNote({ text: "Location is off for CareScout. You can turn it on in Settings, or type your postal code.", error: true });
+        return;
+      }
+      // last known position is instant, only ask the GPS if there isn't one
+      const pos = (await Location.getLastKnownPositionAsync({ maxAge: 10 * 60000 })) ||
+        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+      const [place] = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      const postal = formatPostal(place?.postalCode);
+      const city = cityLabel(place?.city || place?.subregion, place?.region);
+      if (!postal && !city) {
+        setLocNote({ text: "Couldn't work out an address here. Type your postal code instead.", error: true });
+        return;
+      }
+      onChange({ ...values, postalCode: postal || values.postalCode, city: city || values.city });
+      Haptics.selectionAsync().catch(() => {});
+      // phones sometimes only know the first 3 characters, which the backend can't use for distances
+      if (!postal) setLocNote({ text: `Got ${city}. Add your postal code to see distances.`, error: true });
+      else if (postal.length < 7) setLocNote({ text: `Got ${city || "your area"}, but only part of the postal code. Add the rest for distances.`, error: true });
+      else setLocNote({ text: `Using ${postal}${city ? `, ${city}` : ""}` });
+    } catch {
+      setLocNote({ text: "Couldn't get your location. Check that location services are on.", error: true });
+    } finally {
+      setLocating(false);
+    }
+  };
 
   // keep the clinic count between 1 and 25 (blank while typing is fine, it snaps back to 5 on blur)
   const setCount = (raw: string) => {
@@ -55,6 +93,23 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
           />
         </View>
       </View>
+
+      {Platform.OS !== "web" && (
+        <View style={{ gap: 6, marginTop: -6 }}>
+          <Pressable
+            onPress={useMyLocation}
+            disabled={locating}
+            style={({ pressed }) => [styles.locBtn, (pressed || locating) && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Use my location"
+            hitSlop={6}
+          >
+            {locating ? <ActivityIndicator size="small" color={colors.pine} /> : <Ionicons name="locate" size={16} color={colors.pine} />}
+            <T style={styles.locText}>{locating ? "Finding you..." : "Use my location"}</T>
+          </Pressable>
+          {locNote && <T variant="small" style={locNote.error ? { color: "#8A5410" } : { color: colors.pine }}>{locNote.text}</T>}
+        </View>
+      )}
 
       <View>
         <Label>Coverage</Label>
@@ -184,6 +239,8 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.white,
   },
+  locBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingVertical: 4 },
+  locText: { color: colors.pine, fontFamily: fonts.bodySemi, fontSize: 14 },
   moreToggle: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
   moreText: { color: colors.pine, fontFamily: fonts.bodySemi, fontSize: 14 },
   divider: { height: 1, backgroundColor: colors.line, marginHorizontal: -18 },

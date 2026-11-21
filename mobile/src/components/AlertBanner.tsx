@@ -1,5 +1,7 @@
 // Green banner that drops in from the top when a watched clinic opens (real check or simulated demo)
+import { useEffect } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
+import * as Haptics from "expo-haptics";
 import Animated, { SlideInUp, SlideOutUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fonts, radius } from "@/lib/theme";
@@ -9,13 +11,20 @@ import { Ionicons, T } from "./ui";
 export default function AlertBanner() {
   const { alert, setAlert } = useAppState();
   const insets = useSafeAreaInsets();
+  const alertKey = alert ? (alert.alert_id ?? alert.id) : null;
+
+  // a clinic opening is the big moment, so it gets the strong buzz
+  useEffect(() => {
+    if (alertKey != null) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [alertKey]);
+
   if (!alert) return null;
 
   const headline = `${alert.clinic_name} is now ${alert.new_status === "waitlist" ? "taking waitlist sign-ups" : "accepting new patients"}`;
 
   return (
     <Animated.View
-      key={alert.alert_id ?? alert.id}
+      key={alertKey ?? undefined}
       entering={SlideInUp.duration(380)}
       exiting={SlideOutUp.duration(250)}
       style={[styles.wrap, { top: insets.top + 8 }]}

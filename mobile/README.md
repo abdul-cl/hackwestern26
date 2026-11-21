@@ -40,6 +40,14 @@ to something it can reach (a cloudflared tunnel or the deployed Railway URL). Re
 - How it works: the four agents, reading results, privacy + safety, FAQ, owner key for the public deployment
 - `carescout://find?demo=1` (or `/find?demo=1` on web) starts the demo search
 
+## Phone-only extras
+
+- Use my location: fills in your city + postal code from GPS (iOS/Android only)
+- Directions: opens Apple Maps / Google Maps to the clinic
+- Call-back reminders: "Lines open Monday at 9:00 AM. Remind me?" opens the phone's own new-event screen, filled in
+- Share a clinic through the share sheet (copies it on web)
+- Haptics: light buzz when a clinic comes back accepting, stronger one for an opening alert
+
 ## Design + motion
 
 Fonts match the website (Bricolage Grotesque + Instrument Sans, JetBrains Mono for numbers/logs).

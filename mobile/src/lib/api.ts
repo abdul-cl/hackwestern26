@@ -41,7 +41,19 @@ async function errorFrom(res: { status: number; json: () => Promise<any> }) {
   } catch {
     // not json, keep the message above
   }
-  return new ApiError(detail, res.status);
+  return new ApiError(friendlyDetail(detail), res.status);
+}
+
+// the backend's "X_API_KEY is missing" errors are meant for developers, so say what it means for the user
+export const SETUP_HINT = "isn't set up on this server";
+function friendlyDetail(detail: string) {
+  if (/TINYFISH_API_KEY is missing/i.test(detail)) {
+    return `Live search ${SETUP_HINT} yet (its TinyFish key is missing). Turn on Demo mode to see saved results, or add the key to backend/.env and restart the backend.`;
+  }
+  if (/GEMINI_API_KEY is missing/i.test(detail)) {
+    return `Ranking ${SETUP_HINT} yet (its Gemini key is missing). Add the key to backend/.env and restart the backend.`;
+  }
+  return detail;
 }
 
 type RequestOpts = { body?: unknown; query?: Record<string, string | number | undefined | null> };

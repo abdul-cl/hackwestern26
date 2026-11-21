@@ -18,7 +18,7 @@ function buildHtml(pins: { url: string; name: string; lat: number; lng: number; 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function(){
-if(!window.L){document.getElementById('m').innerHTML='<p style="padding:16px;color:#5B6E68;font-size:13px">The map needs an internet connection. The clinic list below still works.</p>';return;}
+if(!window.L){document.getElementById('m').innerHTML='<p style="padding:48px 16px 16px;color:#5B6E68;font-size:13px;line-height:1.4">The map needs an internet connection. The clinic list below still works.</p>';return;}
 var pins=${data};
 var map=L.map('m',{scrollWheelZoom:false}).setView(${center},12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors'}).addTo(map);

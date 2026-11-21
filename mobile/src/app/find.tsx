@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AgentFeed from "@/components/AgentFeed";
 import ApplySheet from "@/components/ApplySheet";
@@ -10,7 +11,7 @@ import ClinicMap from "@/components/ClinicMap";
 import MissionForm from "@/components/MissionForm";
 import { Reveal } from "@/components/motion";
 import { Card, Ionicons, T } from "@/components/ui";
-import { mergeClinics } from "@/lib/clinics";
+import { displayStatus, mergeClinics } from "@/lib/clinics";
 import { colors, fonts, radius } from "@/lib/theme";
 import type { MergedClinic } from "@/lib/types";
 import { useAppState } from "@/state/AppState";
@@ -38,6 +39,25 @@ export default function FindScreen() {
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [applyFor, setApplyFor] = useState<MergedClinic | null>(null);
   const [showMap, setShowMap] = useState(true);
+
+  // a light buzz each time a clinic comes back accepting, and a success buzz when the search finishes.
+  // `buzzed` remembers which clinics already buzzed this run, and resets when a new search starts
+  const buzzed = useRef(new Set<string>());
+  const runId = state.log[0]?.id;
+  useEffect(() => {
+    buzzed.current.clear();
+  }, [runId]);
+  useEffect(() => {
+    for (const c of Object.values(state.scanned)) {
+      if (!buzzed.current.has(c.url) && displayStatus(c) === "accepting") {
+        buzzed.current.add(c.url);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+    }
+  }, [state.scanned]);
+  useEffect(() => {
+    if (state.summary) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [state.summary]);
 
   const clinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
   const hasPins = clinics.some((c) => typeof c.lat === "number" && typeof c.lng === "number");
@@ -92,7 +112,15 @@ export default function FindScreen() {
           <MissionForm values={search} onChange={setSearch} onLaunch={onLaunch} onStop={stop} running={state.running} publicDemo={publicDemo} />
           {(state.running || state.log.length > 0) && (
             <View onLayout={(e) => (feedY.current = e.nativeEvent.layout.y)}>
-              <AgentFeed state={state} onStop={stop} onReset={reset} />
+              <AgentFeed
+                state={state}
+                onStop={stop}
+                onReset={reset}
+                onUseDemo={() => {
+                  setSearch((s) => ({ ...s, useCache: true }));
+                  launch({ useCache: true });
+                }}
+              />
             </View>
           )}
 

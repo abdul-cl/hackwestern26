@@ -3,9 +3,10 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { STAGES, type MissionState, type StageStatus } from "@/hooks/useMission";
+import { SETUP_HINT } from "@/lib/api";
 import { colors, fonts, radius } from "@/lib/theme";
 import { CountUp, PulseLine } from "./motion";
-import { Card, Ionicons, T } from "./ui";
+import { Button, Card, Ionicons, T } from "./ui";
 
 const DOT = { stage: colors.pine, result: colors.sky, error: colors.coral, done: colors.pine, info: colors.faint };
 
@@ -24,7 +25,9 @@ function StageNode({ status, n }: { status?: StageStatus; n: number }) {
   );
 }
 
-export default function AgentFeed({ state, onStop, onReset }: { state: MissionState; onStop: () => void; onReset: () => void }) {
+type FeedProps = { state: MissionState; onStop: () => void; onReset: () => void; onUseDemo?: () => void };
+
+export default function AgentFeed({ state, onStop, onReset, onUseDemo }: FeedProps) {
   const [open, setOpen] = useState(true);
   const { running, stageStatus, log, agents, error, summary } = state;
 
@@ -42,7 +45,7 @@ export default function AgentFeed({ state, onStop, onReset }: { state: MissionSt
 
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <T variant="h2">{running ? "Agents working" : state.stopped ? "Search stopped" : "Search finished"}</T>
+          <T variant="h2">{running ? "Agents working" : state.stopped ? "Search stopped" : error ? "Search didn't run" : "Search finished"}</T>
           {running && busy > 0 && (
             <T variant="small">Most clinics take seconds. Sites that need a browser agent take 1-3 min, two at a time.</T>
           )}
@@ -88,7 +91,13 @@ export default function AgentFeed({ state, onStop, onReset }: { state: MissionSt
       {error && (
         <View style={styles.errorBox} accessibilityRole="alert">
           <Ionicons name="alert-circle" size={16} color={colors.coral} />
-          <T style={{ color: colors.coral, flex: 1, fontSize: 13 }}>{error}</T>
+          <View style={{ flex: 1, gap: 10 }}>
+            <T style={{ color: colors.coral, fontSize: 13, lineHeight: 18 }}>{error}</T>
+            {/* live search can't run on this server, so give a way out right here */}
+            {onUseDemo && error.includes(`Live search ${SETUP_HINT}`) && (
+              <Button small icon="flash" title="Show saved results instead" onPress={onUseDemo} style={{ alignSelf: "flex-start" }} />
+            )}
+          </View>
         </View>
       )}
 
