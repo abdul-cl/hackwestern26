@@ -1,0 +1,50 @@
+This public demo uses a shared demo watchlist, so your own email isn't needed or stored.
+
+On the public demo you can only watch clinics from the CareScout database. Watchlists are only for the demo account (demo@carescout.ca) on the public demo. Run CareScout locally to watch clinics with your own email.
+
+wth is going on w this demo bs. it seems that everything is under the assumption that its a demp and the toggle is gone too. can we j bring it back to normal. id j tell u if smth is needed for demo
+
+also look at the mobile version, that one works perfectly obv some features dont exist like shwoing the tinyfish runnning cuz its mobile butt he main features work. DO NOT ALTER MOBILE. in the github i even made the github public.
+
+---
+
+i set it to 0 will that work
+
+---
+
+ok im getting this issue when i click on demo mode:
+
+* 
+10:36:57 PMLaunching CareScout mission...
+* 10:36:57 PMScout Agent looking for clinics in Toronto, ON...
+* 10:36:57 PMUsing saved results for 6 clinics from the CareScout database.
+* 10:36:57 PMFound 6 clinic websites.
+* 10:36:57 PMShowing 6 saved clinics.
+* 10:36:57 PMCanadian Family Clinic: accepting
+* 10:36:57 PMCrosstown Family Health Team: accepting
+* 10:36:57 PMHealthSource Medical Clinic: accepting
+* 10:36:57 PMHumber River Family Health Team: accepting
+* 10:36:57 PMMount Pleasant Clinic: accepting
+* 10:36:57 PMVillage Family Health Team: accepting
+* 10:36:57 PMGemini Triage Agent ranking & translating results...
+* 10:36:57 PMRanking failed: rank failed: 401 UNAUTHENTICATED. {'error': {'code': 401, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'UNAUTHENTICATED', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'ACCESS_TOKEN_TYPE_UNSUPPORTED', 'metadata': {'method': 'google.ai.generativelanguage.v1. Showing unranked scan results.
+* 10:36:57 PMWatchdog enrolling full clinics for opening alerts...
+* 10:36:57 PMWatching 0 full clinics for openings.
+* 10:36:57 PMDone in 0s: 6 accepting, 0 waitlist, 0 closed.
+
+also can u make sur ethe web version of demo mode works the same way as the mobile version. im like 99% sure mobile is working perfectly as designed too
+
+---
+
+ok i changed the gemini key. tinyfish does not need an update. what now
+
+---
+
+when i click demo and run it. then go to watcha clinic. enter my email it gives the following:
+
+Watch
+Internal server error. Check the backend logs.
+
+---
+
+Yes, commit + push
