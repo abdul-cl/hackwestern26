@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BellPlus, BellRing, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { DEMO_EMAIL } from "../config";
+import { saveWatchEmail } from "../lib/watchEmail";
 import { displayStatus } from "../lib/clinics";
 import { useAppState } from "../state/AppState";
 
@@ -46,6 +47,7 @@ export default function WatchPrompt({ clinics, watched }) {
       for (const c of full) made.push(await api.addWatch(c, userEmail));
       setMine(made);
       setSearch((s) => ({ ...s, email: userEmail })); // the Watchdog page then shows these watches
+      saveWatchEmail(userEmail);
       refreshWatchCount();
     } catch (e) {
       setError(e.message);

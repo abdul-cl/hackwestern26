@@ -16,13 +16,14 @@ function ago(iso) {
 
 /** Monitored clinics (GET /api/watch), "Check All Now", alert history, and "Preview an alert" (changes nothing). */
 export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
-  const { publicDemo } = useAppState();
+  const { publicDemo, emailAlerts } = useAppState();
   const [watches, setWatches] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [message, setMessage] = useState(null);
+  const [note, setNote] = useState(null); // why a demo email wasn't sent (neutral, not an error)
   const [error, setError] = useState(null);
   const userEmail = email.includes("@") ? email.trim() : undefined;
   const [params, setParams] = useSearchParams();
@@ -62,12 +63,18 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
     }
   };
 
-  const simulate = async (watchId) => {
+  // Demo: show the opening alert here and (sendEmail) email it to the watcher. Nothing about the clinic changes.
+  const simulate = async (watchId, sendEmail = true) => {
     setSimulating(true);
     setError(null);
+    setMessage(null);
+    setNote(null);
     try {
-      const r = await api.simulateOpening(watchId);
+      const r = await api.simulateOpening(watchId, sendEmail ? userEmail : undefined);
       onAlert(r.alert);
+      if (r.email?.sent) setMessage(r.email.note);
+      else if (r.email) setNote(r.email.note);
+      else if (sendEmail && !userEmail) setNote("Showing the alert here. Enter the email you watched with (above) to get it by email too.");
       await load();
     } catch (e) {
       setError(e.message);
@@ -82,13 +89,14 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
     if (!id || autoSimulated.current || loading) return;
     autoSimulated.current = true;
     setParams({}, { replace: true });
-    if (watches.some((w) => w.id === id)) simulate(id);
+    if (watches.some((w) => w.id === id)) simulate(id, false); // just the on-page preview: no email from a link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, loading, watches]);
 
   const remove = async (w) => {
     if (!userEmail) {
-      setError("Enter your email above to manage your watches.");
+      setError("Enter the email you watched this clinic with (above) to stop watching it.");
+      document.getElementById("wd-email")?.focus();
       return;
     }
     try {
@@ -114,9 +122,13 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
           </div>
         </div>
         {!userEmail && <p className="mt-2 text-xs text-amber-700">Showing everyone's watches with emails hidden. Enter your email to see only yours.</p>}
-        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Preview an alert to see what an opening alert looks like.</p>}
+        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Simulate opening to see what an opening alert looks like.</p>}
         {checking && <p className="mt-2 text-xs text-slate-500">Agents are re-checking each clinic's website. This takes a few minutes.</p>}
+        {emailAlerts && userEmail && (
+          <p className="mt-2 text-xs text-slate-500">When a watched clinic really starts taking patients, CareScout emails {userEmail}.</p>
+        )}
         {message && <p className="mt-2 text-sm text-emerald-700">{message}</p>}
+        {note && <p className="mt-2 text-sm text-slate-600">{note}</p>}
         {error && <p className="mt-2 text-sm text-rose-700">{error}</p>}
       </section>
 
@@ -143,14 +155,12 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
                   {!userEmail && <span>{w.user_email}</span>}
                 </div>
               </div>
-              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert; changes nothing">
-                <Sparkles className="h-3.5 w-3.5" /> Preview alert
+              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Demo: shows the opening alert and emails it to you. The clinic's real status doesn't change.">
+                <Sparkles className="h-3.5 w-3.5" /> Simulate opening
               </button>
-              {userEmail && (
-                <button onClick={() => remove(w)} className="btn-ghost px-2 py-1 text-slate-400 hover:text-rose-600" aria-label={`Stop watching ${w.clinic_name}`}>
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+              <button onClick={() => remove(w)} className="btn-ghost px-2 py-1 text-slate-400 hover:text-rose-600" aria-label={`Stop watching ${w.clinic_name}`} title="Stop watching">
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           ))
         )}
@@ -172,11 +182,16 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
         </section>
       )}
 
-      <div className="flex justify-end">
-        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-ghost text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert for the newest watched clinic; changes nothing">
-          {simulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Preview an alert
+      <section className="flex flex-col items-center gap-2 text-center">
+        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-secondary">
+          {simulating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Simulate opening (demo)
         </button>
-      </div>
+        <p className="max-w-md text-xs text-slate-500">
+          For live demos: pretends the newest watched clinic just opened. You see the alert here
+          {emailAlerts ? " and get it by email (to the email above)" : ""}. The clinic's real status doesn't change.
+          {!emailAlerts && " Email alerts are off on this server."}
+        </p>
+      </section>
     </div>
   );
 }

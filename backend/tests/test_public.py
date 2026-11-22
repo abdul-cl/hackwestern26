@@ -57,7 +57,8 @@ ADMIN = {"X-Admin-Key": "admin-secret"}
 config.PUBLIC_DEMO, config.ADMIN_KEY, config.PUBLIC_RATE_LIMIT = True, "admin-secret", 1000
 
 # --- health tells the website which mode it's in
-check("health: public_demo true for visitors (Auto-Fill still available)", c.get("/health").json() == {"status": "ok", "public_demo": True, "apply": True})
+h = c.get("/health").json()
+check("health: public_demo true for visitors (Auto-Fill still available)", h["public_demo"] is True and h["apply"] is True and h["status"] == "ok", str(h))
 check("health: public_demo false with admin key", c.get("/health", headers=ADMIN).json()["public_demo"] is False)
 check("health: wrong admin key stays public", c.get("/health", headers={"X-Admin-Key": "nope"}).json()["public_demo"] is True)
 

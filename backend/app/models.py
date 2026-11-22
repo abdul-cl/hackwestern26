@@ -88,6 +88,9 @@ class MissionRequest(BaseModel):
 
 class SimulateRequest(BaseModel):
     watch_id: int | None = None
+    # Demo button: also email the example alert, only to the watch's own email (user_email must match it).
+    send_email: bool = False
+    user_email: str | None = Field(None, max_length=200)
 
 
 class PageExtract(BaseModel):

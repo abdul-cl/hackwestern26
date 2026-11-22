@@ -72,7 +72,10 @@ DEMO_EMAIL = "demo@carescout.ca"
 # on a domain verified in Resend; Resend's test sender (onboarding@resend.dev) only delivers to your own Resend email.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "CareScout <onboarding@resend.dev>").strip()
-SITE_URL = os.getenv("SITE_URL", "").strip()  # the website's address, for the "stop watching" link in emails
+SITE_URL = os.getenv("SITE_URL", "").strip()
+# "Simulate opening (demo)" can email the example alert to the watcher: at most once a minute per watch and this many a
+# day for the whole site, so the button can't be used to flood someone's inbox.
+DEMO_EMAILS_PER_DAY = max(0, int(os.getenv("DEMO_EMAILS_PER_DAY", "30")))  # the website's address, for the "stop watching" link in emails
 # How many proxies sit in front of the app and append to X-Forwarded-For (Railway/Render: 1). The client's real IP is
 # that many entries from the end; anything before it was written by the client and can't be trusted.
 TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "1")))

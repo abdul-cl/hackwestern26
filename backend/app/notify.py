@@ -67,12 +67,44 @@ def _post(payload: dict) -> None:
         raise RuntimeError(f"Resend answered HTTP {r.status_code}: {r.text[:200]}")
 
 
-def _send(to: str, message: dict) -> None:
+def _send(to: str, message: dict) -> str | None:
+    """Send one email. Returns None on success, else the error text (logged, never raised)."""
     try:
         _post({"from": config.ALERT_FROM_EMAIL, "to": [to], "subject": message["subject"], "text": message["text"], "html": message["html"]})
         print(f"[notify] emailed an opening alert to {to.split('@')[0][:1]}***@{to.split('@')[-1]}")
+        return None
     except Exception as e:  # never let email break a check
         print(f"[notify] email failed: {type(e).__name__}: {str(e)[:200]}")
+        return str(e)[:200]
+
+
+def build_demo_email(alert: dict, real_status: str) -> dict:
+    """The demo version of an opening alert: same email, but it says plainly that nothing really changed."""
+    name = alert["clinic_name"]
+    message = build_email({**alert, "new_status": "accepting", "evidence_quote": "",
+                           "message": f"Good news: {name} is now accepting new patients."})
+    note = (f"This is a demo of a CareScout opening alert. {name} hasn't actually changed: right now it's {real_status}. "
+            "When a clinic you watch really starts taking patients, you get an email just like this one.")
+    return {
+        "subject": "[Demo] " + message["subject"],
+        "text": note + "\n\n" + message["text"],
+        "html": f"<p style=\"background:#f1f5f9;padding:10px;border-radius:8px;color:#334155\">{html.escape(note)}</p>" + message["html"],
+    }
+
+
+def send_demo(alert: dict, real_status: str, to: str) -> str | None:
+    """Email the demo alert right away. Returns None when sent, else why it wasn't."""
+    if not enabled():
+        return "Email alerts are off on this server (RESEND_API_KEY isn't set)."
+    if not deliverable(to):
+        return "CareScout doesn't email test or demo addresses (like demo@carescout.ca or .test addresses)."
+    error = _send(to, build_demo_email(alert, real_status))
+    if error is None:
+        return None
+    if "own email" in error.lower() or "verify a domain" in error.lower():
+        return ("Resend's test sender only delivers to the email you signed up to Resend with. "
+                "Use that address, or verify a domain in Resend and set ALERT_FROM_EMAIL.")
+    return f"The email service didn't accept it: {error}"
 
 
 def send_alert(alert: dict, to: str, background: bool = True) -> bool:

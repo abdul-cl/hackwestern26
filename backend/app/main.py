@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 import time
 from collections import deque
 
-from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh, feedback
+from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh, feedback, notify
 
 print("[startup] TINYFISH_API_KEY:", "set" if os.getenv("TINYFISH_API_KEY") else "MISSING")
 print("[startup] GEMINI_API_KEY:", "set" if os.getenv("GEMINI_API_KEY") else "MISSING")
@@ -186,7 +186,8 @@ def health(request: Request):
     # public_demo tells the website to show saved results only (live agents unlock with the admin key)
     public = config.public_restricted(request)
     # apply: whether Auto-Fill is available to this visitor (on the public demo too, within limits)
-    return {"status": "ok", "public_demo": public, "apply": (not public) or config.PUBLIC_APPLY}
+    # email_alerts: whether opening alerts are emailed (RESEND_API_KEY set); the mobile app reads it too
+    return {"status": "ok", "public_demo": public, "apply": (not public) or config.PUBLIC_APPLY, "email_alerts": notify.enabled()}
 
 
 app.include_router(scanning.router)
