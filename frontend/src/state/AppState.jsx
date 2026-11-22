@@ -18,6 +18,8 @@ export function AppStateProvider({ children }) {
   const [publicDemo, setPublicDemo] = useState(false);
   // Auto-Fill works on the public demo too (the backend limits it); false only if the backend turned it off there.
   const [applyAvailable, setApplyAvailable] = useState(true);
+  // The server emails opening alerts (RESEND_API_KEY set).
+  const [emailAlerts, setEmailAlerts] = useState(false);
   const email = search.email.trim();
 
   useEffect(() => {
@@ -25,6 +27,7 @@ export function AppStateProvider({ children }) {
       .health()
       .then((h) => {
         if (h.apply === false) setApplyAvailable(false);
+        setEmailAlerts(!!h.email_alerts);
         if (h.public_demo) {
           // public demo: saved results only (watchlists there use a shared demo account, see WatchPrompt)
           setPublicDemo(true);
@@ -74,8 +77,8 @@ export function AppStateProvider({ children }) {
   );
 
   const value = useMemo(
-    () => ({ search, setSearch, mission, launch, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, publicDemo, applyAvailable }),
-    [search, mission, launch, alert, watchCount, refreshWatchCount, publicDemo, applyAvailable],
+    () => ({ search, setSearch, mission, launch, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, publicDemo, applyAvailable, emailAlerts }),
+    [search, mission, launch, alert, watchCount, refreshWatchCount, publicDemo, applyAvailable, emailAlerts],
   );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

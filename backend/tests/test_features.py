@@ -198,6 +198,39 @@ for addr in (config.DEMO_EMAIL, "someone@example.com", "x@clinic.test"):
 r = client.post("/api/watch/simulate-opening", json={"watch_id": w["id"]})
 time.sleep(0.2)
 check("simulate-opening (preview) sends nothing", r.status_code == 200 and sent == [], str(sent))
+# "Simulate opening (demo)" with send_email: emails the watcher a clearly-labelled demo alert, nothing else changes
+import app.watch_api as watch_api
+watch_api._demo_email_sent.clear(); watch_api._demo_emails_today.clear()
+body = {"watch_id": w["id"], "send_email": True, "user_email": "patient@gmail.com"}
+r = client.post("/api/watch/simulate-opening", json=body)
+e = r.json().get("email") or {}
+check("demo email: sent to the watcher", r.status_code == 200 and e.get("sent") is True and len(sent) == 1
+      and sent[0]["to"] == ["patient@gmail.com"], (r.text, str(sent)[:200]))
+check("demo email: labelled a demo, says nothing changed", sent and sent[0]["subject"].startswith("[Demo] ")
+      and "hasn't actually changed" in sent[0]["text"] and "hasn&#x27;t actually changed" in sent[0]["html"], str(sent)[:300])
+check("demo email: the watch keeps its real status", watchdog.get_watch(w["id"])["last_status"] == "closed")
+check("demo email: not stored as a real alert", all(not a.get("simulated") for a in watchdog.list_alerts("patient@gmail.com", 50)))
+r = client.post("/api/watch/simulate-opening", json=body)
+check("demo email: once a minute per watch", r.json()["email"]["sent"] is False and "minute" in r.json()["email"]["note"] and len(sent) == 1, r.text)
+watch_api._demo_email_sent.clear()
+r = client.post("/api/watch/simulate-opening", json={**body, "user_email": "someone.else@gmail.com"})
+check("demo email: only to whoever knows the watch's email", r.json()["email"]["sent"] is False and len(sent) == 1, r.text)
+r = client.post("/api/watch/simulate-opening", json={"watch_id": w["id"]})
+check("no send_email: preview only, no email key", "email" not in r.json() and len(sent) == 1, r.text)
+config.DEMO_EMAILS_PER_DAY = 1
+r = client.post("/api/watch/simulate-opening", json=body)
+check("demo email: daily site-wide cap", r.json()["email"]["sent"] is False and "limit" in r.json()["email"]["note"], r.text)
+config.DEMO_EMAILS_PER_DAY = 30
+watch_api._demo_email_sent.clear(); watch_api._demo_emails_today.clear()
+config.RESEND_API_KEY = ""
+r = client.post("/api/watch/simulate-opening", json=body)
+check("demo email: says when email alerts are off", r.json()["email"]["sent"] is False and "RESEND_API_KEY" in r.json()["email"]["note"], r.text)
+config.RESEND_API_KEY = "re_test"
+notify._post = lambda payload: (_ for _ in ()).throw(RuntimeError("Resend answered HTTP 403: You can only send testing emails to your own email address"))
+r = client.post("/api/watch/simulate-opening", json=body)
+check("demo email: explains Resend's own-address rule", r.json()["email"]["sent"] is False and "signed up to Resend" in r.json()["email"]["note"], r.text)
+notify._post = lambda payload: sent.append(payload)
+sent.clear()
 bad = {**alert, "clinic_name": "<script>x</script>", "evidence_quote": "<b>hi</b>"}
 check("email HTML is escaped", "<script>" not in notify.build_email(bad)["html"])
 notify._post = lambda payload: (_ for _ in ()).throw(RuntimeError("down"))
@@ -222,7 +255,8 @@ check("clinic with an online form: number kept, no call script", r4["phone_numbe
 # ---- Auto-Fill on the public demo: on, but only for known clinic forms and within limits
 config.PUBLIC_DEMO, config.PUBLIC_APPLY, config.PUBLIC_APPLY_PER_HOUR, config.PUBLIC_APPLY_PER_DAY = True, True, 2, 40
 m._apply_hits.clear(); m._apply_day.clear()
-check("health tells the site Auto-Fill is available", client.get("/health").json() == {"status": "ok", "public_demo": True, "apply": True})
+h = client.get("/health").json()
+check("health tells the site Auto-Fill is available", h["public_demo"] is True and h["apply"] is True and "email_alerts" in h, str(h))
 clinic_db.add_url("https://known.ca", "London, ON")
 clinic_db.save_check("https://known.ca", "London, ON", {"name": "K", "url": "https://known.ca", "status": "accepting", "evidence_quote": "We accept new patients",
                      "waitlist_url": "https://forms.example-host.com/k/123", "raw_notes": "", "address": None, "lat": None, "lng": None}, None, "page")

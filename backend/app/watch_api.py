@@ -1,10 +1,11 @@
 """Clinic Watchdog endpoints + the optional background auto-check (storage is in watchdog.py)."""
 import asyncio
 import os
+import time
 
 from fastapi import APIRouter, HTTPException, Request
 
-from . import config, common, models, watchdog, scanning, clinic_db
+from . import config, common, models, watchdog, scanning, clinic_db, notify
 
 router = APIRouter()
 
@@ -138,4 +139,31 @@ def simulate_opening(request: Request, req: models.SimulateRequest | None = None
     alert["message"] = (f"Example alert: this is what you'd get if {watch['clinic_name']} started taking new patients. "
                         f"Right now: {now}.")
     print(f"[watch] alert preview for watch {watch['id']} ({watch['clinic_name']}), nothing changed")
-    return {"alert": {**alert, "simulated": True}}
+    result = {"alert": {**alert, "simulated": True}}
+    if req and req.send_email:
+        result["email"] = demo_email(watch, alert, now, req.user_email)
+    return result
+
+
+_demo_email_sent: dict[int, float] = {}  # watch id -> when its last demo email went out
+_demo_emails_today: list[float] = []
+
+
+def demo_email(watch: dict, alert: dict, real_status: str, user_email: str | None) -> dict:
+    """Email the demo alert to the watch's own email (the caller must know it), within the rate limits."""
+    to = watch["user_email"]
+    masked = watchdog.mask_email(to)
+    if (user_email or "").strip().lower() != (to or "").strip().lower():
+        return {"sent": False, "to": None, "note": "Enter the email you watched this clinic with to get the demo email."}
+    now = time.time()
+    if now - _demo_email_sent.get(watch["id"], 0) < 60:
+        return {"sent": False, "to": masked, "note": "A demo email for this clinic was just sent. Try again in a minute."}
+    _demo_emails_today[:] = [t for t in _demo_emails_today if now - t < 86400]
+    if len(_demo_emails_today) >= config.DEMO_EMAILS_PER_DAY:
+        return {"sent": False, "to": masked, "note": "Today's limit of demo emails is used up."}
+    problem = notify.send_demo({**alert, "user_email": to}, real_status, to)
+    if problem:
+        return {"sent": False, "to": masked, "note": problem}
+    _demo_email_sent[watch["id"]] = now
+    _demo_emails_today.append(now)
+    return {"sent": True, "to": masked, "note": f"Demo email sent to {masked}. It can take a minute to arrive (check spam too)."}

@@ -1,11 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useAppState } from "../state/AppState";
 import WatchdogView from "../components/WatchdogView";
 import ErrorBoundary from "../components/ErrorBoundary";
+import { savedWatchEmail, saveWatchEmail } from "../lib/watchEmail";
 
 export default function WatchdogPage() {
-  const { search, setSearch, setAlert, setWatchCount } = useAppState();
-  const onEmail = useCallback((value) => setSearch((s) => ({ ...s, email: value })), [setSearch]);
+  const { search, setAlert, setWatchCount } = useAppState();
+  // the email from this visit's search / "Watch it", else the one this browser last watched with (kept apart from the
+  // search form, so opening the Watchdog never makes the next search auto-watch)
+  const [email, setEmail] = useState(() => search.email || savedWatchEmail());
+  const onEmail = useCallback((value) => {
+    setEmail(value);
+    saveWatchEmail(value);
+  }, []);
   const onChanged = useCallback((n) => setWatchCount(n), [setWatchCount]);
 
   return (
@@ -17,7 +24,7 @@ export default function WatchdogPage() {
         </p>
       </div>
       <ErrorBoundary label="The Watchdog">
-        <WatchdogView email={search.email} onEmail={onEmail} onAlert={setAlert} onChanged={onChanged} />
+        <WatchdogView email={email} onEmail={onEmail} onAlert={setAlert} onChanged={onChanged} />
       </ErrorBoundary>
     </div>
   );

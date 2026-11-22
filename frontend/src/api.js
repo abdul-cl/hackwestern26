@@ -131,5 +131,9 @@ export const api = {
   clinicStats: () => request("GET", "/api/clinics/stats"),
   refreshClinic: (url, city, postalCode) =>
     request("POST", "/api/clinics/refresh", { body: { url, city, user_postal_code: postalCode || null } }),
-  simulateOpening: (watchId) => request("POST", "/api/watch/simulate-opening", { body: watchId ? { watch_id: watchId } : {} }),
+  // emailTo: also email the (clearly labelled) demo alert to the watcher, if it's the email the clinic is watched with
+  simulateOpening: (watchId, emailTo) =>
+    request("POST", "/api/watch/simulate-opening", {
+      body: { ...(watchId ? { watch_id: watchId } : {}), ...(emailTo ? { send_email: true, user_email: emailTo } : {}) },
+    }),
 };
