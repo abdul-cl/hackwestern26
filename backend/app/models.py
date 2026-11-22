@@ -83,6 +83,7 @@ class MissionRequest(BaseModel):
     clinic_urls: list[str] = Field([], max_length=50)  # optional: skip discovery and scan these
     max_clinics: int = 5  # how many clinics this search includes (clamped 1-25)
     refresh: str = Field("auto", max_length=10)  # auto: re-check out-of-date clinics | all: re-check every clinic | none: saved only
+    watch_agents: bool = False  # watch mode: every clinic in this search is read by a TinyFish browser agent, streamed live
 
 
 class SimulateRequest(BaseModel):

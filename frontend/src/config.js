@@ -20,6 +20,7 @@ export const DEFAULT_SEARCH = {
   useCache: false,
   maxClinics: 5, // how many clinics one search includes (1-25)
   recheckAll: false, // true: re-check every clinic live, even ones checked recently
+  watchAgents: false, // true: a TinyFish browser agent reads every clinic, live on screen (watch mode)
 };
 
 export const MAX_CLINICS = 25;
