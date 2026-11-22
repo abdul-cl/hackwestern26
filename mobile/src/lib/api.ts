@@ -1,7 +1,7 @@
 // Every backend call goes through here, same as frontend/src/api.js
 import { fetch as expoFetch } from "expo/fetch";
 import { API_BASE_URL, API_KEY } from "./config";
-import type { ApplyResult, Clinic, DoctorVerification, MissionEvent, MissionRequest, PatientInfo, RankedClinic, Watch, WatchAlert } from "./types";
+import type { ApplyResult, Clinic, DoctorVerification, Feedback, MissionEvent, MissionRequest, PatientInfo, RankedClinic, Watch, WatchAlert } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -131,11 +131,14 @@ export async function streamPost(
 }
 
 export const api = {
-  health: () => request<{ status: string; public_demo: boolean; email_alerts?: boolean }>("GET", "/health"),
+  health: () => request<{ status: string; public_demo: boolean; apply?: boolean }>("GET", "/health"),
   missionStream: (body: MissionRequest, onEvent: (e: MissionEvent) => void, signal?: AbortSignal) =>
     streamPost("/api/mission/stream", body, onEvent, signal),
   apply: (waitlistUrl: string, patientInfo: PatientInfo) =>
     request<ApplyResult>("POST", "/api/apply", { body: { waitlist_url: waitlistUrl, patient_info: patientInfo } }),
+  // a full postal code -> its city, so the search runs where the patient lives
+  locate: (postalCode: string) => request<{ city: string | null }>("GET", "/api/locate", { query: { postal_code: postalCode } }),
+  feedback: (body: Feedback) => request<{ ok: boolean }>("POST", "/api/feedback", { body }),
   verifyDoctor: (doctorName: string, city: string) =>
     request<DoctorVerification>("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),
   // saved clinics for a city, straight from the database (no agents), used to show results instantly

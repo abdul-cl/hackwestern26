@@ -18,7 +18,7 @@ type AppState = {
   loadMore: () => void;
   backendUp: boolean | null; // null until the first health check comes back
   publicDemo: boolean;
-  emailAlerts: boolean; // the server emails watchers when a clinic opens
+  applyAvailable: boolean; // Auto-Fill works for this visitor (the public demo allows it within limits)
   ownerKey: string;
   saveOwnerKey: (key: string) => Promise<void>;
   alert: WatchAlert | null;
@@ -39,7 +39,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   // the public demo only serves saved results, so flip the form to match
   const toDemo = useCallback(() => setSearch((s) => ({ ...s, useCache: true })), []);
-  const { backendUp, publicDemo, emailAlerts, ownerKey, saveOwnerKey } = useBackend(toDemo);
+  const { backendUp, publicDemo, applyAvailable, ownerKey, saveOwnerKey } = useBackend(toDemo);
   const { alert, setAlert } = useOpeningAlerts(email, backendUp);
   const { savedAt, showSaved } = useSavedResults(search, setSearch, mission);
   const { watchCount, setWatchCount, refreshWatchCount } = useWatchCount(email, mission.state.watched);
@@ -54,10 +54,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       search, setSearch, mission, launch, loadMore,
-      backendUp, publicDemo, emailAlerts, ownerKey, saveOwnerKey,
+      backendUp, publicDemo, applyAvailable, ownerKey, saveOwnerKey,
       alert, setAlert, watchCount, setWatchCount, refreshWatchCount, savedAt, showSaved,
     }),
-    [search, mission, launch, loadMore, backendUp, publicDemo, emailAlerts, ownerKey, saveOwnerKey, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, savedAt, showSaved],
+    [search, mission, launch, loadMore, backendUp, publicDemo, applyAvailable, ownerKey, saveOwnerKey, alert, setAlert, watchCount, setWatchCount, refreshWatchCount, savedAt, showSaved],
   );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

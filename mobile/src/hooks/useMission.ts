@@ -36,6 +36,8 @@ export type MissionState = {
   preview: Clinic[]; // saved clinics shown straight away while the agents confirm them
   loadingMore: boolean;
   noMore: boolean; // "Load more" found nothing new
+  rankError: string | null; // ranking failed (Gemini busy): results show unranked with "Retry ranking"
+  rankRetrying: boolean;
 };
 
 const initial: MissionState = {
@@ -55,6 +57,8 @@ const initial: MissionState = {
   preview: [],
   loadingMore: false,
   noMore: false,
+  rankError: null,
+  rankRetrying: false,
 };
 
 let logId = 0;
@@ -84,7 +88,10 @@ type Action =
   | { type: "more_start" }
   | { type: "more_event"; event: MissionEvent }
   | { type: "more_ranked"; ranked: RankedClinic[] }
-  | { type: "more_end"; added: number; error?: string };
+  | { type: "more_end"; added: number; error?: string }
+  | { type: "rank_retry" }
+  | { type: "rank_retry_done"; ranked: RankedClinic[] }
+  | { type: "rank_retry_failed"; message: string };
 
 function reducer(state: MissionState, action: Action): MissionState {
   switch (action.type) {
@@ -116,6 +123,19 @@ function reducer(state: MissionState, action: Action): MissionState {
       };
     case "reset":
       return initial;
+    case "rank_retry":
+      return { ...state, rankRetrying: true, log: [...state.log, entry("stage", "Retrying the ranking...")] };
+    case "rank_retry_done":
+      return {
+        ...state,
+        rankRetrying: false,
+        rankError: null,
+        ranked: action.ranked,
+        stageStatus: { ...state.stageStatus, rank: "done" },
+        log: [...state.log, entry("info", `Ranked ${action.ranked.length} clinics.`)],
+      };
+    case "rank_retry_failed":
+      return { ...state, rankRetrying: false, rankError: action.message, log: [...state.log, entry("error", `Ranking failed again: ${action.message}`)] };
     case "preview":
       // only useful while nothing real has come back yet
       return state.running ? { ...state, preview: action.clinics.filter((c) => !state.scanned[c.url]) } : state;
@@ -217,6 +237,7 @@ function applyEvent(state: MissionState, e: MissionEvent): MissionState {
       // not fatal, just show it and keep going
       return {
         ...state,
+        rankError: e.stage === "rank" ? e.message : state.rankError,
         stageStatus: { ...state.stageStatus, [e.stage]: "error" },
         log: [...state.log, entry("error", e.message)],
       };
@@ -327,7 +348,29 @@ export function useMission() {
     }
   }, []);
 
-  return { state, start, stop, reset, updateClinic, restore, loadMore };
+  // ranking failed (usually Gemini overloaded): rank what's on screen again, without a new search
+  const lastBody = useRef<MissionRequest | null>(null);
+  const startSearch = useCallback(
+    (body: MissionRequest) => {
+      lastBody.current = body;
+      return start(body);
+    },
+    [start],
+  );
+  const retryRank = useCallback(async () => {
+    const clinics = Object.values(stateRef.current.scanned).filter((c) => !isFailedScan(c));
+    if (!clinics.length) return;
+    dispatch({ type: "rank_retry" });
+    try {
+      const b = lastBody.current;
+      const r = await api.rank(clinics.slice(0, RANK_LIMIT), b?.language || "English", b?.coverage_type || "OHIP");
+      dispatch({ type: "rank_retry_done", ranked: r.ranked_clinics });
+    } catch (e: any) {
+      dispatch({ type: "rank_retry_failed", message: e?.message || "ranking is unavailable" });
+    }
+  }, []);
+
+  return { state, start: startSearch, stop, reset, updateClinic, restore, loadMore, retryRank };
 }
 
 export type Mission = ReturnType<typeof useMission>;

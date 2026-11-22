@@ -1,7 +1,7 @@
 // Watchdog tab: clinics you're watching, Check all now, alert history, and the demo "Simulate opening"
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Reveal } from "@/components/motion";
 import PhoneAlerts from "@/components/PhoneAlerts";
@@ -24,7 +24,7 @@ function ago(iso: string | null) {
 }
 
 export default function WatchdogScreen() {
-  const { search, setSearch, setAlert, setWatchCount, publicDemo, emailAlerts } = useAppState();
+  const { search, setSearch, setAlert, setWatchCount, publicDemo } = useAppState();
   const [watches, setWatches] = useState<Watch[]>([]);
   const [alerts, setAlerts] = useState<WatchAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +98,19 @@ export default function WatchdogScreen() {
     }
   };
 
+  // "Preview the alert" on Find opens this tab with ?simulate=<watch id>: run it once, then clear the param
+  const { simulate: simulateParam } = useLocalSearchParams<{ simulate?: string }>();
+  useEffect(() => {
+    if (!simulateParam) return;
+    const id = Number(simulateParam);
+    const t = setTimeout(() => {
+      router.setParams({ simulate: undefined });
+      simulate(Number.isFinite(id) ? id : undefined);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulateParam]);
+
   const remove = async (w: Watch) => {
     if (!userEmail) {
       setError("Enter your email above to manage your watches.");
@@ -138,14 +151,6 @@ export default function WatchdogScreen() {
               autoComplete="email"
               accessibilityLabel="Your email"
             />
-            {!!userEmail && emailAlerts && (
-              <View style={styles.emailOn}>
-                <Ionicons name="mail-outline" size={14} color={colors.pine} />
-                <T variant="small" style={{ flex: 1, color: colors.pineDeep }}>
-                  When a clinic you watch opens up, we'll also email {userEmail}.
-                </T>
-              </View>
-            )}
             {!userEmail && (
               <T variant="small" style={{ color: "#8A5410", marginTop: 6 }}>
                 Showing everyone's watches with emails hidden. Enter your email to see only yours.
@@ -272,7 +277,6 @@ export default function WatchdogScreen() {
 }
 
 const styles = StyleSheet.create({
-  emailOn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   page: { padding: 16, gap: 18, paddingBottom: 48 },
   input: {
     borderWidth: 1,

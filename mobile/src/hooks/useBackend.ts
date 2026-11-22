@@ -1,4 +1,4 @@
-// Talks to /health: is the backend up, is it the public demo, does it email alerts.
+// Talks to /health: is the backend up, is it the public demo, is Auto-Fill available.
 // Also keeps the owner key (unlocks live agents on the public deployment), which changes the answer
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -9,7 +9,7 @@ const ADMIN_KEY_STORAGE = "carescout_admin_key";
 export function useBackend(onPublicDemo: () => void) {
   const [backendUp, setBackendUp] = useState<boolean | null>(null); // null until the first answer
   const [publicDemo, setPublicDemo] = useState(false);
-  const [emailAlerts, setEmailAlerts] = useState(false);
+  const [applyAvailable, setApplyAvailable] = useState(true); // false only if the backend turned Auto-Fill off
   const [ownerKey, setOwnerKey] = useState("");
 
   const checkHealth = useCallback(async () => {
@@ -17,7 +17,7 @@ export function useBackend(onPublicDemo: () => void) {
       const h = await api.health();
       setBackendUp(true);
       setPublicDemo(!!h.public_demo);
-      setEmailAlerts(!!h.email_alerts);
+      setApplyAvailable(h.apply !== false);
       if (h.public_demo) onPublicDemo();
     } catch {
       setBackendUp(false);
@@ -56,5 +56,5 @@ export function useBackend(onPublicDemo: () => void) {
     [checkHealth],
   );
 
-  return { backendUp, publicDemo, emailAlerts, ownerKey, saveOwnerKey };
+  return { backendUp, publicDemo, applyAvailable, ownerKey, saveOwnerKey };
 }

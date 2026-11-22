@@ -8,7 +8,7 @@ import StatusBadge from "@/components/StatusBadge";
 import { Button, Card, Ionicons, T } from "@/components/ui";
 import type { DisplayStatus } from "@/lib/clinics";
 import { forgetDetails, hasSavedDetails } from "@/lib/secureDetails";
-import HealthCareConnect from "@/components/HealthCareConnect";
+import { NextSteps } from "@/components/AfterSearch";
 import { colors, fonts, radius } from "@/lib/theme";
 import { useAppState } from "@/state/AppState";
 
@@ -113,8 +113,8 @@ export default function HowItWorksScreen() {
           ))}
         </View>
 
-        <Section title="If nothing's accepting" sub="CareScout finds clinics taking patients right now. Ontario also keeps its own waitlist, and it's worth being on both.">
-          <HealthCareConnect />
+        <Section title="If nothing's accepting" sub="CareScout finds clinics taking patients right now. These run alongside it, and it's worth doing them too.">
+          <NextSteps />
         </Section>
 
         <Section title="Questions">

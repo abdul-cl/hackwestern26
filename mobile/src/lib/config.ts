@@ -48,6 +48,9 @@ export const DEFAULT_SEARCH: Search = {
 
 export const MAX_CLINICS = 25;
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
+
+// the shared demo watchlist (same as the backend's DEMO_EMAIL), the only one the public demo allows
+export const DEMO_EMAIL = "demo@carescout.ca";
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];
 
 // downtown London, ON, used until clinics with coordinates come in

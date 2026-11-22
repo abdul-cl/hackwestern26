@@ -37,7 +37,7 @@ export default function ApplySheet({ clinic, defaults, onClose }: Props) {
 type BodyProps = { clinic: MergedClinic; defaults: Search; onClose: () => void; onBusy: (b: boolean) => void; busy: boolean };
 
 function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
-  const { publicDemo } = useAppState();
+  const { applyAvailable } = useAppState();
   const [form, setForm] = useState<PatientInfo>({ name: "", email: defaults.email || "", phone: "", postal_code: defaults.postalCode || "" });
   // kept apart from the saved details on purpose: health info is never stored on the phone
   const [reason, setReason] = useState("");
@@ -86,7 +86,7 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
         setVault((v) => ({ ...v, hasSaved: true }));
       }
       const r = reason.trim();
-      setResult(await api.apply(clinic.waitlist_url, r ? { ...form, visit_reason: r } : form));
+      setResult(await api.apply(clinic.waitlist_url, r ? { ...form, reason: r } : form));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -114,14 +114,14 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
           </T>
         </View>
 
-        {publicDemo && (
+        {!applyAvailable && (
           <View style={{ gap: 12 }}>
-            <T variant="small">Auto-fill runs a live browser agent, which is turned off on this public demo. You can open the clinic's form and fill it in yourself.</T>
+            <T variant="small">Auto-fill is turned off on this server right now. You can open the clinic's form and fill it in yourself.</T>
             <Button title="Open the clinic's form" icon="open-outline" onPress={openForm} />
           </View>
         )}
 
-        {!result && !publicDemo && (
+        {!result && applyAvailable && (
           <View style={{ gap: 12 }}>
             {vault.hasSaved && (
               <View style={{ gap: 6 }}>
@@ -151,7 +151,7 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
                 style={[styles.input, styles.reason]}
                 value={reason}
                 onChangeText={setReason}
-                maxLength={500}
+                maxLength={600}
                 multiline
                 textAlignVertical="top"
                 placeholder="e.g. Need a family doctor for ongoing asthma care and prescription refills"
@@ -159,7 +159,7 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
                 accessibilityLabel="Reason for your visit, optional"
               />
               <T variant="small" style={{ marginTop: 6 }}>
-                Only goes into the clinic's form if it has a box for it. Not saved on your phone. {reason.length}/500
+                Only goes into the clinic's form if it has a box for it. Not saved on your phone. {reason.length}/600
               </T>
             </View>
             {vault.canSave && !vault.hasSaved && (

@@ -30,7 +30,8 @@ export type RankedClinic = {
   phone_number: string | null;
   call_hours: string | null;
   call_script: string | null;
-  posted_wait?: string | null; // only when the clinic posts a wait itself, never estimated
+  hours?: string | null; // opening hours, from the clinic's own site
+  wait_note?: string | null; // wait / busy times the clinic itself states (never estimated)
 };
 
 // what a card actually shows: scan data with the ranking info merged on top
@@ -120,4 +121,6 @@ export type WatchAlert = {
   created_at?: string;
 };
 
-export type PatientInfo = { name: string; email: string; phone: string; postal_code: string; visit_reason?: string };
+export type Feedback = { helped: "yes" | "somewhat" | "no"; ease: number | null; comment: string; page: string };
+
+export type PatientInfo = { name: string; email: string; phone: string; postal_code: string; reason?: string };

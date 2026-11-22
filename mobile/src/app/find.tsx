@@ -18,11 +18,11 @@ import ApplySheet from "@/components/ApplySheet";
 import ClinicCard from "@/components/ClinicCard";
 import ClinicMap from "@/components/ClinicMap";
 import HandoffSheet from "@/components/HandoffSheet";
-import HealthCareConnect from "@/components/HealthCareConnect";
+import { FeedbackSurvey, NextSteps, StatusFilterRow, WatchPrompt } from "@/components/AfterSearch";
 import MissionForm from "@/components/MissionForm";
 import { Reveal } from "@/components/motion";
-import { Button, Card, ChipSelect, Ionicons, T } from "@/components/ui";
-import { COVERAGE_FILTERS, displayStatus, matchesCoverage, mergeClinics, type CoverageFilter } from "@/lib/clinics";
+import { Button, Card, Ionicons, T } from "@/components/ui";
+import { displayStatus, matchesStatus, mergeClinics, type StatusFilter } from "@/lib/clinics";
 import { searchFromParams, type HandoffParams } from "@/lib/handoff";
 import { savedAgo } from "@/lib/storage";
 import { colors, fonts, radius } from "@/lib/theme";
@@ -43,7 +43,7 @@ function EmptyState() {
 
 export default function FindScreen() {
   const { search, setSearch, mission, launch, loadMore, publicDemo, refreshWatchCount, savedAt, showSaved, backendUp } = useAppState();
-  const { state, stop, reset, updateClinic } = mission;
+  const { state, stop, reset, updateClinic, retryRank } = mission;
   const params = useLocalSearchParams<HandoffParams>();
   const scroll = useRef<Animated.ScrollView>(null);
   const resultsY = useRef(0);
@@ -53,7 +53,7 @@ export default function FindScreen() {
   const [applyFor, setApplyFor] = useState<MergedClinic | null>(null);
   const [showMap, setShowMap] = useState(true);
   const [handoff, setHandoff] = useState(false);
-  const [coverage, setCoverage] = useState<CoverageFilter>("All");
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
   // a light buzz each time a clinic comes back accepting, and a success buzz when the search finishes.
   // `buzzed` remembers which clinics already buzzed this run, and resets when a new search starts
@@ -76,12 +76,10 @@ export default function FindScreen() {
   }, [state.summary, state.restoredAt]);
 
   const allClinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
-  // coverage filter: based on what each clinic's own website says, so clinics that don't say are hidden by it
-  const clinics = useMemo(() => allClinics.filter((c) => matchesCoverage(c, coverage)), [allClinics, coverage]);
-  const hiddenByFilter = allClinics.length - clinics.length;
+  // status filter, like the website's (coverage is chosen in the search form)
+  const clinics = useMemo(() => allClinics.filter((c) => matchesStatus(c, filter)), [allClinics, filter]);
   // saved results from the database, shown while the agents confirm them (dropped once each comes back)
   const preview = useMemo(() => state.preview.map((c) => ({ ...c, ranked: false }) as MergedClinic), [state.preview]);
-  const accepting = allClinics.filter((c) => displayStatus(c) === "accepting").length;
   const finished = !state.running && state.log.length > 0;
   const hasPins = clinics.some((c) => typeof c.lat === "number" && typeof c.lng === "number");
 
@@ -197,6 +195,9 @@ export default function FindScreen() {
             </View>
           )}
 
+          {/* full clinics: watched only if the person gave an email or asks here */}
+          {state.summary && !state.running && !state.restoredAt && <WatchPrompt key={state.log[0]?.id} clinics={allClinics} watched={state.watched} />}
+
           <View onLayout={(e) => (resultsY.current = e.nativeEvent.layout.y)}>
             {allClinics.length + preview.length > 0 ? (
               <View style={{ gap: 12 }}>
@@ -230,27 +231,23 @@ export default function FindScreen() {
                   )}
                 </View>
 
-                {allClinics.length > 0 && (
-                  <View style={{ gap: 6 }}>
-                    <ChipSelect label="Filter by coverage" options={[...COVERAGE_FILTERS]} value={coverage} onChange={(v) => setCoverage(v as CoverageFilter)} />
-                    {coverage !== "All" && (
-                      <T variant="small">
-                        {coverage === "Takes OHIP"
-                          ? "Clinics whose website says they take OHIP."
-                          : "Clinics whose website says they see UHIP, IFHP, uninsured or private-pay patients."}
-                        {hiddenByFilter > 0 ? ` ${hiddenByFilter} hidden, including clinics that don't say.` : ""}
-                      </T>
-                    )}
-                  </View>
+                {allClinics.length > 0 && <StatusFilterRow clinics={allClinics} value={filter} onChange={setFilter} />}
+
+                {filter !== "all" && clinics.length === 0 && allClinics.length > 0 && (
+                  <Card style={{ gap: 6, alignItems: "center", paddingVertical: 20 }}>
+                    <T variant="small">No clinics match this filter.</T>
+                    <Button small variant="secondary" title="Show all" onPress={() => setFilter("all")} />
+                  </Card>
                 )}
 
-                {coverage !== "All" && clinics.length === 0 && allClinics.length > 0 && (
-                  <Card style={{ gap: 6, alignItems: "center", paddingVertical: 20 }}>
-                    <Ionicons name="filter-outline" size={22} color={colors.faint} />
-                    <T variant="small" style={{ textAlign: "center", maxWidth: 300 }}>
-                      None of these clinics' websites mention this. Call them to ask, or tap All to see every clinic.
+                {state.rankError && !state.running && (
+                  // Gemini was busy: the results are real but not sorted for you yet
+                  <View style={styles.rankError} accessibilityRole="alert">
+                    <T variant="small" style={{ color: "#8A5410" }}>
+                      Ranking is unavailable right now (the AI model is busy), so these results aren't sorted for you yet. Everything else is up to date.
                     </T>
-                  </Card>
+                    <Button small variant="secondary" icon="refresh" title="Retry ranking" onPress={retryRank} loading={state.rankRetrying} style={{ alignSelf: "flex-start" }} />
+                  </View>
                 )}
 
                 {hasPins && showMap && <ClinicMap clinics={clinics} selectedUrl={selectedUrl} onSelect={selectFromMap} />}
@@ -263,7 +260,7 @@ export default function FindScreen() {
                       city={search.city}
                       postalCode={search.postalCode}
                       publicDemo={publicDemo}
-                      rankingPending={state.running && !state.ranked}
+                      rankingPending={(state.running || state.rankRetrying) && !c.ranked}
                       selected={c.url === selectedUrl}
                       onSelect={setSelectedUrl}
                       onApply={setApplyFor}
@@ -319,15 +316,14 @@ export default function FindScreen() {
                   </View>
                 )}
 
-                {!state.running && <HealthCareConnect noneAccepting={accepting === 0} />}
               </View>
-            ) : finished && !state.error ? (
-              // the search finished but found nothing at all
-              <HealthCareConnect noneAccepting />
             ) : (
               !state.running && state.log.length === 0 && <EmptyState />
             )}
           </View>
+          {finished && !state.restoredAt && !state.error && <NextSteps />}
+          {/* anonymous survey, once a search has finished */}
+          {state.summary && !state.running && !state.restoredAt && <FeedbackSurvey page="find" />}
         </Animated.ScrollView>
 
         {/* only in the tree while a search runs, so screen readers don't find a hidden pill the rest of the time */}
@@ -398,5 +394,6 @@ const styles = StyleSheet.create({
   },
   previewHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2 },
   previewCard: { opacity: 0.72 },
+  rankError: { gap: 10, backgroundColor: "#FCF1DF", padding: 14, borderRadius: radius.md },
   saved: { flexDirection: "row", gap: 10, backgroundColor: colors.pineSoft, padding: 14, borderRadius: radius.md },
 });

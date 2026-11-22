@@ -1,16 +1,17 @@
 // The search form at the top of the Find tab
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
 import { COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS, type Search } from "@/lib/config";
-import { cityLabel, formatPostal } from "@/lib/device";
+import { api } from "@/lib/api";
+import { cityLabel, formatPostal, isFullPostal } from "@/lib/device";
 import { colors, fonts, radius } from "@/lib/theme";
 import { Button, Card, ChipSelect, Ionicons, Label, T } from "./ui";
 
 type Props = {
   values: Search;
-  onChange: (s: Search) => void;
+  onChange: (s: Search | ((cur: Search) => Search)) => void;
   onLaunch: () => void;
   onStop: () => void;
   running: boolean;
@@ -57,6 +58,34 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
     }
   };
 
+  // a full postal code fills in its city (any Ontario city), so the search runs where the patient lives
+  // only after the person types one: a saved or linked postal code never overwrites the city
+  const [cityFromPostal, setCityFromPostal] = useState<string | null>(null);
+  const [typedPostal, setTypedPostal] = useState<string | null>(null);
+  useEffect(() => {
+    const code = (typedPostal || "").trim();
+    if (!isFullPostal(code)) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      api
+        .locate(formatPostal(code))
+        .then((r) => {
+          if (!live || !r.city) return;
+          const city = r.city;
+          setCityFromPostal(city);
+          onChange((cur) => (cur.city.trim().toLowerCase() === city.toLowerCase() ? cur : { ...cur, city }));
+        })
+        .catch(() => {});
+    }, 450);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // only when the typed postal code changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedPostal]);
+  const cityMatchesPostal = !!cityFromPostal && values.city.trim().toLowerCase() === cityFromPostal.toLowerCase();
+
   // keep the clinic count between 1 and 25 (blank while typing is fine, it snaps back to 5 on blur)
   const setCount = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -77,13 +106,22 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
             accessibilityLabel="City"
             maxLength={100}
           />
+          {cityMatchesPostal && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+              <Ionicons name="location-outline" size={12} color={colors.muted} />
+              <T variant="small" style={{ fontSize: 11 }}>From your postal code</T>
+            </View>
+          )}
         </View>
         <View style={{ flex: 2 }}>
           <Label>Postal code</Label>
           <TextInput
             style={styles.input}
             value={values.postalCode}
-            onChangeText={set("postalCode")}
+            onChangeText={(t) => {
+              set("postalCode")(t);
+              setTypedPostal(t);
+            }}
             placeholder="N6A 3K7"
             placeholderTextColor={colors.faint}
             autoCapitalize="characters"
