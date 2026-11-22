@@ -1,0 +1,13 @@
+ok i merged it and did both of those 2
+
+---
+
+ok how can i check its saving to the database
+
+---
+
+also where did the delete button go for the watchdog
+
+---
+
+compare to mobile and see if there are any demo buttons that we need to put in yk. umm also the mobile sends a notfication due to  a status change. lets make a web version of that but notification is alr there but kinda useless cuz they gotta open the site. so j email the email address they give when a status cahnges. we gonna have to create a demo button for this to simulate a status changing because realistically it depends on the clinic to change it. normal funcitionaliy for it should exist but the buttton is j to reproduce it on the spot for the demo ykwim.
