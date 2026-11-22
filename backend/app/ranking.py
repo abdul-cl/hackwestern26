@@ -65,6 +65,11 @@ def rank(req: models.RankRequest):
     try:
         ranked = llm.generate_json(prompt, models.RankResponse)  # retries + backup model when Gemini is overloaded
     except Exception as e:
+        if llm.is_key_error(e):
+            print(f"[rank] Gemini rejected the API key: {str(e)[:300]}")
+            raise HTTPException(status_code=502, detail=(
+                "rank failed: Google rejected the server's Gemini API key (it's invalid, deleted or disabled). "
+                "Put a new GEMINI_API_KEY in the backend's .env / Railway variables and restart."))
         raise HTTPException(status_code=502, detail=f"rank failed: {str(e)[:300]}")
     clinics = [c.model_dump() for c in ranked.ranked_clinics]
     # Fill url from the input clinics (trust our data, not the model): exact name, then case-insensitive name,

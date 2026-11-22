@@ -114,6 +114,13 @@ fake = use({"main-model": [overloaded(), overloaded()], "backup-model": [overloa
 r = client.post("/api/rank", json={"clinics": [clinic]})
 check("rank: every model busy -> JSON 502", r.status_code == 502 and "rank failed" in r.json()["detail"], r.text)
 
+class KeyRejected(Exception):
+    code = 401
+fake = use({"main-model": [KeyRejected("401 UNAUTHENTICATED. API key not valid. Please pass a valid API key.")]})
+r = client.post("/api/rank", json={"clinics": [clinic]})
+check("rank: rejected key -> plain-English 502, no retries", r.status_code == 502 and "Gemini API key" in r.json()["detail"]
+      and "UNAUTHENTICATED" not in r.json()["detail"] and fake.calls == ["main-model"], (r.text, fake.calls))
+
 os.environ["GEMINI_API_KEY"] = ""
 r = client.post("/api/rank", json={"clinics": [clinic]})
 check("rank: missing key is still a JSON 500", r.status_code == 500, r.text)

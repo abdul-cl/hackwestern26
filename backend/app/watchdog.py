@@ -18,6 +18,7 @@ def now_iso() -> str:
 
 def connect() -> sqlite3.Connection:
     """Open the DB, creating the table (and adding columns missing from older versions)."""
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)  # a fresh DATA_DIR (e.g. /data) may not exist yet
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute(

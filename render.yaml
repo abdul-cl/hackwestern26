@@ -15,9 +15,7 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false # e.g. https://carescout.you.workers.dev,https://your-domain.com
-      - key: PUBLIC_DEMO
-        value: "1"
       - key: CARESCOUT_ADMIN_KEY
-        generateValue: true
+        generateValue: true # keeps feedback comments private (GET /api/feedback)
       - key: DISABLE_DOCS
         value: "1"

@@ -61,10 +61,12 @@ r = c.post("/api/rank", json={"clinics": []}, headers={"Origin": "https://evil.c
 check("cors: evil origin gets no allow-origin on real request", r.headers.get("access-control-allow-origin") is None)
 
 # --- generic 500 (no internals leaked)
-watchdog.DB_PATH = tmp / "no_such_dir" / "x.db"
+real_list = watchdog.list_watches
+def broken_list(_email): raise RuntimeError("secret internal detail /var/db")
+watchdog.list_watches = broken_list
 r = c.get("/api/watch")
 check("500 is generic", r.status_code == 500 and r.json() == {"detail": "Internal server error. Check the backend logs."}, r.text)
-watchdog.DB_PATH = tmp / "t.db"
+watchdog.list_watches = real_list
 
 # --- size limits
 check("oversize clinics -> 422", c.post("/api/rank", json={"clinics": [{}] * 31}).status_code == 422)
