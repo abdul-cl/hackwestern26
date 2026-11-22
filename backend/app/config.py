@@ -51,6 +51,16 @@ PUBLIC_APPLY = os.getenv("PUBLIC_APPLY", "1").strip().lower() not in ("0", "fals
 PUBLIC_APPLY_PER_HOUR = max(0, int(os.getenv("PUBLIC_APPLY_PER_HOUR", "3")))
 PUBLIC_APPLY_PER_DAY = max(0, int(os.getenv("PUBLIC_APPLY_PER_DAY", "40")))
 
+# First search of a city with nothing saved yet, on the public demo: CareScout searches the web live (TinyFish search,
+# quick page reads, TinyFish browser agents when a site needs one) and saves the results for everyone after. Limited to
+# PUBLIC_NEW_CITY_MAX clinics per search and PUBLIC_NEW_CITIES_PER_DAY such searches a day (429 after that).
+PUBLIC_NEW_CITY_MAX = max(1, int(os.getenv("PUBLIC_NEW_CITY_MAX", "8")))
+# A search that finds fewer saved clinics than asked for has TinyFish look for more. In saved-results mode (demo, public
+# demo) that web search runs at most once per city per WEB_SEARCH_COOLDOWN_H hours, so a small city isn't searched again
+# on every visit.
+WEB_SEARCH_COOLDOWN_H = float(os.getenv("WEB_SEARCH_COOLDOWN_H", "6"))
+PUBLIC_NEW_CITIES_PER_DAY = max(0, int(os.getenv("PUBLIC_NEW_CITIES_PER_DAY", "20")))
+
 # The shared demo watchlist. On the public demo, watchlists only work for this address, so visitors can try the
 # Watchdog flow without storing their own email, and nobody can add, delete or fake alerts for real people's watches.
 DEMO_EMAIL = "demo@carescout.ca"
@@ -101,14 +111,12 @@ STATUSES = ("accepting", "waitlist", "closed")
 # ---------- Clinic database (see clinic_db.py / refresh.py) ----------
 # Where clinics.db lives. On Railway/Render point this at a persistent volume (e.g. /data) so it survives redeploys.
 DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
-SEED_PATH = BACKEND_DIR / "seed_clinics.json"  # clinics loaded into an empty database on startup
 # A recording of one real live search (backend/record_demo.py). Demo / public-demo searches replay its Scout and
 # Browser Swarm steps at REPLAY_SPEED x (no gap longer than REPLAY_MAX_GAP_S), then rank and watch live as usual.
 DEMO_REPLAY_PATH = BACKEND_DIR / "demo_mission.json"
 DEMO_REPLAY = os.getenv("DEMO_REPLAY", "1").strip().lower() not in ("0", "false", "no")
 REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "8"))
 REPLAY_MAX_GAP_S = float(os.getenv("REPLAY_MAX_GAP_S", "1.5"))
-SEED_ON_START = os.getenv("CARESCOUT_SEED", "1").strip().lower() not in ("0", "false", "no")
 FRESH_HOURS = float(os.getenv("FRESH_HOURS", "12"))  # a clinic checked within this many hours isn't re-checked in "auto" mode
 # Availability older than this is "expired": shown as "Needs a re-check" (with the last-seen status), never as current.
 MAX_STATUS_AGE_DAYS = float(os.getenv("MAX_STATUS_AGE_DAYS", "7"))
