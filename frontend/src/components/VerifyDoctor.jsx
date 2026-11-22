@@ -54,7 +54,7 @@ export default function VerifyDoctor({ city }) {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchCheck className="h-4 w-4" />} Verify
         </button>
       </form>
-      {loading && <p className="mt-2 text-xs text-slate-500">Checking the CPSO register. This can take a minute or two.</p>}
+      {loading && <p className="mt-2 text-xs text-slate-500">Checking the official CPSO register. Usually about 10 seconds.</p>}
       {error && <p className="mt-2 text-rose-700">{error}</p>}
       {result && (
         <div className="mt-3 space-y-1.5">

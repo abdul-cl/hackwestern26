@@ -4,21 +4,29 @@ import json
 import re
 import time
 
+import httpx
 from fastapi import APIRouter
 
 from . import config, models, agents
 
 router = APIRouter()
-CPSO_URL = "https://doctors.cpso.on.ca/"
+CPSO_URL = "https://register.cpso.on.ca/"  # the CPSO register (doctors.cpso.on.ca redirects here since 2025)
+PROFILE_PREFIXES = ("https://register.cpso.on.ca/", "https://doctors.cpso.on.ca/")  # the only links we ever show
+SEARCH_URL = CPSO_URL + "Get-Search-Results/"  # the register's own search (what its search page calls), JSON
 VERIFY_CACHE_S = 3600  # reuse a found result for an hour (saves agent runs during demos)
 _verify_cache: dict[str, tuple[float, dict]] = {}
 
 
 def verify_goal(doctor_name: str, city: str) -> str:
+    parts = doctor_name.split()
+    first, last = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", doctor_name)
     return (
         "Use the College of Physicians and Surgeons of Ontario (CPSO) public register on this site to look up "
         f"the doctor named {json.dumps(doctor_name)} practising in or near {json.dumps(city)}, Ontario. "
-        "Use the doctor search (by name, and by city/location if the form has it). Do not log in or create an account. "
+        f"Go straight to the search form on this page: type {json.dumps(last)} in the Last Name field"
+        + (f" and {json.dumps(first)} in the First Name field" if first else "")
+        + ", then press Search. Don't open other pages, menus or the advanced search unless the quick search can't find them. "
+        "Do not log in or create an account. "
         "If several doctors match, pick the one whose practice location is in that city; if it is still ambiguous, "
         "pick none and say so in notes. Open the matching doctor's profile and return JSON with: "
         "found (true if a matching doctor profile was found), "
@@ -56,7 +64,7 @@ def clean_verify(res: dict, doctor_name: str, city: str) -> dict:
     status = text("registration_status", 80)
     number = re.sub(r"\D", "", text("cpso_number", 20) or "") or None
     profile = text("profile_url", 500)
-    if profile and not profile.startswith("https://doctors.cpso.on.ca/"):
+    if profile and not profile.startswith(PROFILE_PREFIXES):
         profile = None  # only ever link to the official register
     langs = res.get("languages") if isinstance(res.get("languages"), list) else []
     fields = dict(
@@ -77,6 +85,54 @@ def clean_verify(res: dict, doctor_name: str, city: str) -> dict:
     return verify_result(verified, "found", notes, **fields)
 
 
+def search_register(first: str, last: str) -> dict | None:
+    """Search the CPSO register directly (a few seconds). Returns its JSON {totalcount, results}, or None if the
+    register couldn't be reached / answered in an unexpected way (then the TinyFish agent tries instead)."""
+    data = {"lastName": last, "cbx-includeinactive": "on"}
+    if first:
+        data["firstName"] = first
+    try:
+        r = httpx.post(SEARCH_URL, data=data, timeout=25, headers={"User-Agent": "CareScout (doctor verification)"})
+        if r.status_code != 200:
+            return None
+        body = json.loads(r.text)
+        return body if isinstance(body, dict) and "results" in body else None
+    except Exception as e:
+        print(f"[cpso] direct register search failed: {type(e).__name__}: {str(e)[:150]}")
+        return None
+
+
+def from_register(found: dict, doctor_name: str, city: str) -> dict:
+    """Turn the register's search results into the response."""
+    if found.get("totalcount") == -1:
+        return verify_result(False, "not_found", f"Too many doctors match {doctor_name}. Add the full first name, or search {CPSO_URL} directly.")
+    results = [r for r in found.get("results") or [] if isinstance(r, dict)]
+    if not results:
+        return verify_result(False, "not_found", f"No CPSO registration found for {doctor_name}. "
+                             f"Check the spelling, try without 'Dr.', or search the register directly: {CPSO_URL}")
+    in_city = [r for r in results if (r.get("city") or "").strip().lower() == city.strip().lower()]
+    if len(results) == 1:
+        doc = results[0]
+    elif len(in_city) == 1:
+        doc = in_city[0]
+    else:
+        where = f" in {city}" if in_city else ""
+        return verify_result(False, "not_found", f"{len(in_city) or len(results)} doctors named {doctor_name}{where} are on the CPSO "
+                             f"register, so CareScout can't tell which one. Search {CPSO_URL} with the full name.")
+    number = re.sub(r"\D", "", str(doc.get("cpsonumber") or "")) or None
+    status = (str(doc.get("registrationstatus") or "").strip() or None)
+    specialty = ", ".join(x.strip() for x in str(doc.get("specialties") or "").split(",") if x.strip()) or None
+    place = ", ".join(x for x in (str(doc.get("street1") or "").strip(), str(doc.get("city") or "").strip()) if x)
+    notes = f"Found {str(doc.get('name') or doctor_name).strip()} on the CPSO register" + (f", practising at {place}" if place else "") + "."
+    verified = is_active_status(status)
+    if not verified:
+        notes += f" Registration status is '{status}', not active." if status else " The registration status could not be confirmed."
+    return verify_result(
+        verified, "found", notes, cpso_number=number, registration_status=status, specialty=specialty,
+        profile_url=f"{CPSO_URL}physician-info/?cpsonum={number}" if number else None,
+    )
+
+
 @router.post("/api/verify-doctor")
 async def verify_doctor(req: models.VerifyDoctorRequest):
     """Look a doctor up on the official CPSO register. Always 200 with the same shape once the request is valid."""
@@ -87,6 +143,17 @@ async def verify_doctor(req: models.VerifyDoctorRequest):
     hit = _verify_cache.get(key)
     if hit and time.monotonic() - hit[0] < VERIFY_CACHE_S:
         return hit[1]
+    # 1) the register's own search: a few seconds, exactly what the register shows
+    parts = name.split()
+    first, last = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", name)
+    found = await asyncio.to_thread(search_register, first, last)
+    if found is not None:
+        result = from_register(found, name, city)
+        if result["lookup_status"] == "found":
+            _verify_cache[key] = (time.monotonic(), result)
+        return result
+
+    # 2) the register couldn't be searched directly: a TinyFish browser agent looks it up instead (slow)
     config.require_key("TINYFISH_API_KEY")
 
     def run() -> dict:

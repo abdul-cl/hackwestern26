@@ -19,7 +19,8 @@ GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS",
 GEMINI_RETRIES = max(1, int(os.getenv("GEMINI_RETRIES", "2")))  # attempts per model on a temporary error
 SCAN_TIMEOUT = float(os.getenv("SCAN_TIMEOUT_S", "180"))  # seconds per clinic scan (a timed-out agent keeps its slot anyway, so short limits only lose results)
 APPLY_TIMEOUT = float(os.getenv("APPLY_TIMEOUT_S", "120"))  # seconds for a form fill
-VERIFY_TIMEOUT = float(os.getenv("VERIFY_TIMEOUT_S", "45"))  # seconds for a CPSO registry lookup
+# seconds for a CPSO register lookup: the agent fills the search form, opens results, then the profile (often 1-2 min)
+VERIFY_TIMEOUT = float(os.getenv("VERIFY_TIMEOUT_S", "150"))
 GEMINI_TIMEOUT_MS = 60_000
 MAX_SCAN_URLS = 20
 MAX_AGENTS = max(1, int(os.getenv("TINYFISH_MAX_AGENTS", "2")))  # TinyFish plan limit on concurrent agents
