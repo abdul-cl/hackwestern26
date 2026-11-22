@@ -178,5 +178,15 @@ check("background loop keeps checking, survives an error", len(runs) >= 3 and se
 watch_api.run_watch_check = real_check
 check("auto-check off by default", float(os.getenv("WATCHDOG_INTERVAL_MIN", "0") or 0) == 0)
 
+# a DATA_DIR folder that doesn't exist yet (fresh server, volume not mounted): watching creates it instead of a 500
+old_path = wd.DB_PATH
+wd.DB_PATH = tmp / "not-made-yet" / "sub" / "clinics.db"
+try:
+    w = wd.add_watch("Fresh", "https://fresh.ca", "closed", "f@x.test")
+    check("watch works when DATA_DIR doesn't exist yet", w["id"] >= 1 and wd.DB_PATH.exists())
+except Exception as e:
+    check("watch works when DATA_DIR doesn't exist yet", False, e)
+wd.DB_PATH = old_path
+
 check("real backend/clinics.db not created by tests", REAL_DB.exists() == real_db_existed)
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))

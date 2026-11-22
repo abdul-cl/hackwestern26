@@ -23,6 +23,15 @@ def is_timeout(e: Exception) -> bool:
     return isinstance(e, (httpx.TimeoutException, TimeoutError)) or "timed out" in str(e).lower()
 
 
+KEY_ERROR_WORDS = ("api key not valid", "api_key_invalid", "reported as leaked", "api key expired", "unauthenticated")
+
+
+def is_key_error(e: Exception) -> bool:
+    """True when Google rejected the GEMINI_API_KEY itself (invalid, deleted, disabled or flagged as leaked)."""
+    text = str(e).lower()
+    return getattr(e, "code", None) == 401 or any(w in text for w in KEY_ERROR_WORDS)
+
+
 def is_transient(e: Exception) -> bool:
     """True for errors worth retrying or switching models: overload, rate limit, server error, timeout."""
     if is_timeout(e):

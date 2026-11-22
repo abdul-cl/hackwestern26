@@ -5,6 +5,7 @@ The summary only ever returns counts and averages, never anyone's comment.
 """
 import contextlib
 import sqlite3
+from pathlib import Path
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +16,7 @@ router = APIRouter()
 
 
 def connect() -> sqlite3.Connection:
+    Path(clinic_db.DB_PATH).parent.mkdir(parents=True, exist_ok=True)  # a fresh DATA_DIR may not exist yet
     conn = sqlite3.connect(clinic_db.DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute(
