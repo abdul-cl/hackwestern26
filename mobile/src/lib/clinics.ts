@@ -80,3 +80,22 @@ export function telHref(phone: string) {
   const clean = (s?: string) => (s || "").replace(/[^\d+()-]/g, "");
   return "tel:" + clean(main) + (ext ? "," + clean(ext) : "");
 }
+
+// what a clinic's own website says about coverage, from its badges + notes. a clinic can be both
+// (takes OHIP and also sees UHIP / uninsured patients) or neither (doesn't say)
+export function coverageOf(c: Partial<MergedClinic>) {
+  const text = [...(c.coverage_tags || []), c.raw_notes || ""].join(" | ");
+  const noOhip = /\b(no|not|doesn'?t|does not|don'?t|do not)\s+(accept\w*\s+|take\w*\s+|bill\w*\s+)?ohip\b|\bohip\s+(is\s+)?not\s+(accepted|covered)/i.test(text);
+  const ohip = !noOhip && /\bohip\b/i.test(text);
+  const withoutOhip = noOhip || /\b(uninsured|uhip|ifhp|private[- ]pay|self[- ]pay|no health card)\b/i.test(text);
+  return { ohip, withoutOhip };
+}
+
+export const COVERAGE_FILTERS = ["All", "Takes OHIP", "Without OHIP"] as const;
+export type CoverageFilter = (typeof COVERAGE_FILTERS)[number];
+
+export function matchesCoverage(c: Partial<MergedClinic>, f: CoverageFilter) {
+  if (f === "All") return true;
+  const cov = coverageOf(c);
+  return f === "Takes OHIP" ? cov.ohip : cov.withoutOhip;
+}

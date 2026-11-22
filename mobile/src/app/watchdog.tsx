@@ -4,9 +4,11 @@ import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Styl
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Reveal } from "@/components/motion";
+import PhoneAlerts from "@/components/PhoneAlerts";
 import StatusBadge from "@/components/StatusBadge";
 import { Button, Card, Ionicons, Label, T } from "@/components/ui";
 import { api } from "@/lib/api";
+import { askToNotify, canNotify, notifyPermission } from "@/lib/notify";
 import { hostOf } from "@/lib/clinics";
 import { colors, fonts, radius } from "@/lib/theme";
 import type { Watch, WatchAlert } from "@/lib/types";
@@ -22,7 +24,7 @@ function ago(iso: string | null) {
 }
 
 export default function WatchdogScreen() {
-  const { search, setSearch, setAlert, setWatchCount, publicDemo } = useAppState();
+  const { search, setSearch, setAlert, setWatchCount, publicDemo, emailAlerts } = useAppState();
   const [watches, setWatches] = useState<Watch[]>([]);
   const [alerts, setAlerts] = useState<WatchAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +85,11 @@ export default function WatchdogScreen() {
     setSimulating(watchId ?? "newest");
     setError(null);
     try {
+      // first time: ask for notifications so the demo shows a real one
+      if (canNotify && (await notifyPermission()) === "undetermined") await askToNotify();
       const r = await api.simulateOpening(watchId);
-      setAlert(r.alert);
+      // a few seconds' delay so you can leave the app or lock the phone and see it arrive
+      setAlert(r.alert, { notifyIn: 3 });
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -133,12 +138,21 @@ export default function WatchdogScreen() {
               autoComplete="email"
               accessibilityLabel="Your email"
             />
+            {!!userEmail && emailAlerts && (
+              <View style={styles.emailOn}>
+                <Ionicons name="mail-outline" size={14} color={colors.pine} />
+                <T variant="small" style={{ flex: 1, color: colors.pineDeep }}>
+                  When a clinic you watch opens up, we'll also email {userEmail}.
+                </T>
+              </View>
+            )}
             {!userEmail && (
               <T variant="small" style={{ color: "#8A5410", marginTop: 6 }}>
                 Showing everyone's watches with emails hidden. Enter your email to see only yours.
               </T>
             )}
           </View>
+          <PhoneAlerts />
           <Button
             title="Check all now"
             icon="refresh"
@@ -258,6 +272,7 @@ export default function WatchdogScreen() {
 }
 
 const styles = StyleSheet.create({
+  emailOn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   page: { padding: 16, gap: 18, paddingBottom: 48 },
   input: {
     borderWidth: 1,

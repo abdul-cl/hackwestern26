@@ -30,6 +30,7 @@ export type RankedClinic = {
   phone_number: string | null;
   call_hours: string | null;
   call_script: string | null;
+  posted_wait?: string | null; // only when the clinic posts a wait itself, never estimated
 };
 
 // what a card actually shows: scan data with the ranking info merged on top
@@ -83,6 +84,7 @@ export type MissionRequest = {
   use_cache: boolean;
   max_clinics: number;
   refresh: "auto" | "all";
+  clinic_urls?: string[]; // "Load more": check just these clinics
 };
 
 export type ApplyResult = {
@@ -118,4 +120,4 @@ export type WatchAlert = {
   created_at?: string;
 };
 
-export type PatientInfo = { name: string; email: string; phone: string; postal_code: string };
+export type PatientInfo = { name: string; email: string; phone: string; postal_code: string; visit_reason?: string };

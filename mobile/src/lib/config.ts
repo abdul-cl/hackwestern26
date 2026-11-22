@@ -1,3 +1,4 @@
+import type { MissionRequest } from "./types";
 import { Platform } from "react-native";
 
 // Same idea as frontend/src/config.js: one place for backend settings.
@@ -51,3 +52,19 @@ export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Pun
 
 // downtown London, ON, used until clinics with coordinates come in
 export const DEFAULT_MAP_CENTER = { latitude: 42.9849, longitude: -81.2453 };
+
+// the form → the request the backend wants (used by a new search and by "Load more")
+export function toMissionRequest(s: Search, publicDemo: boolean): MissionRequest {
+  return {
+    city: s.city.trim() || "London, ON",
+    user_postal_code: s.postalCode.trim() || null,
+    preferences: [],
+    language: s.language,
+    coverage_type: s.coverage,
+    user_email: s.email.trim() || null,
+    auto_watch_closed: true,
+    use_cache: s.useCache || publicDemo, // the public demo only ever serves saved results
+    max_clinics: Math.max(1, Math.min(MAX_CLINICS, Number(s.maxClinics) || 5)),
+    refresh: s.recheckAll ? "all" : "auto",
+  };
+}

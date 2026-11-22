@@ -126,7 +126,7 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
         style={styles.moreToggle}
         accessibilityRole="button"
         accessibilityLabel={showMore ? "Fewer options" : "More options: email, clinic count, re-checks"}
-        accessibilityState={{ expanded: showMore }}
+        aria-expanded={showMore}
         hitSlop={8}
       >
         <T style={styles.moreText}>{showMore ? "Fewer options" : "Email, clinic count, re-checks"}</T>
