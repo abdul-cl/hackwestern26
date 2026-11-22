@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.13.5-nightly.202611160626.76f1b5129",
+  "checkpoint_id": "01M80H5S08TNS0PM8R00C76J1Y",
+  "strategy": "manual-commit",
+  "branch": "Abdul/frontend",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "backend/app/config.py",
+    "backend/app/models.py",
+    "backend/app/orchestrator.py",
+    "backend/app/refresh.py",
+    "backend/tests/test_features.py",
+    "frontend/src/components/AgentFeed.jsx",
+    "frontend/src/components/MissionForm.jsx",
+    "frontend/src/config.js",
+    "frontend/src/hooks/useMission.js",
+    "frontend/src/state/AppState.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 30822,
+    "cache_read_tokens": 19851457,
+    "output_tokens": 19543,
+    "api_call_count": 21
+  },
+  "redaction": {
+    "replacements": 341,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 115,
+      "credentialed_uri": 0,
+      "entropy": 169,
+      "key_context": 57,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
