@@ -20,6 +20,15 @@ os.environ["TINYFISH_API_KEY"] = "fake"
 config.MAX_AGENTS = 50
 c = TestClient(m.app, raise_server_exceptions=False).__enter__()
 fails = []
+searches = []
+def register_returning(body):
+    """Fake the register's own search (None = unreachable, so the TinyFish agent is used)."""
+    def search(first, last):
+        searches.append((first, last))
+        return body
+    cpso.search_register = search
+    cpso._verify_cache.clear()
+register_returning(None)  # the agent tests below: register unreachable
 KEYS = {"verified", "cpso_number", "registration_status", "specialty", "languages", "gender", "profile_url", "notes", "lookup_status"}
 
 
@@ -61,7 +70,8 @@ code, j = verify("Dr. Jane  Smith")
 check("found active -> verified", code == 200 and j["verified"] is True and j["lookup_status"] == "found" and set(j) == KEYS, str(j))
 check("cpso_number digits only", j["cpso_number"] == "123456")
 check("fields passed through", j["specialty"] == "Family Medicine" and j["languages"] == ["English", "French"] and j["gender"] == "Female")
-check("agent goes to CPSO, 'Dr.' stripped from name", goals[-1]["url"] == "https://doctors.cpso.on.ca/" and '"Jane Smith"' in goals[-1]["goal"] and "Dr." not in goals[-1]["goal"], str(goals[-1]))
+check("agent goes to CPSO, 'Dr.' stripped from name", goals[-1]["url"] == "https://register.cpso.on.ca/" and '"Jane Smith"' in goals[-1]["goal"] and "Dr." not in goals[-1]["goal"], str(goals[-1]))
+check("agent is told which fields to fill", '"Smith"' in goals[-1]["goal"] and "Last Name" in goals[-1]["goal"] and '"Jane"' in goals[-1]["goal"], goals[-1]["goal"][:300])
 
 n = len(goals)
 code, j2 = verify("jane smith", "london")
@@ -80,7 +90,7 @@ check("bad languages type -> []", verify()[1]["languages"] == [])
 agent_returning({"found": False, "notes": ""})
 code, j = verify("Nobody Real")
 check("not found -> 200 verified false + helpful notes", code == 200 and j["verified"] is False and j["lookup_status"] == "not_found"
-      and "Nobody Real" in j["notes"] and "doctors.cpso.on.ca" in j["notes"], str(j))
+      and "Nobody Real" in j["notes"] and "register.cpso.on.ca" in j["notes"], str(j))
 n = len(goals)
 verify("Nobody Real")
 check("not-found is not cached", len(goals) == n + 1)
@@ -99,7 +109,7 @@ agent_returning(FOUND, sleep=2)
 t = time.time()
 code, j = verify()
 check("timeout -> 200 verified false", code == 200 and j["lookup_status"] == "timeout" and j["verified"] is False and time.time() - t < 1.5, str(j))
-config.VERIFY_TIMEOUT = 45
+config.VERIFY_TIMEOUT = 150
 
 check("name too short -> 422", c.post("/api/verify-doctor", json={"doctor_name": "J"}).status_code == 422)
 check("missing name -> 422", c.post("/api/verify-doctor", json={"city": "London"}).status_code == 422)
@@ -108,5 +118,48 @@ os.environ.pop("TINYFISH_API_KEY")
 cpso._verify_cache.clear()
 code, j = verify()
 check("missing TinyFish key -> JSON 500", code == 500 and "TINYFISH_API_KEY" in j["detail"], str(j))
+
+os.environ["TINYFISH_API_KEY"] = "fake"
+import app.cpso as cpso_mod
+cpso_mod._verify_cache.clear()
+agent_returning({**FOUND, "profile_url": "https://register.cpso.on.ca/physician-info/?cpsonum=123456"})
+code, j = verify("Jane Smith", "Toronto")
+check("new register profile link is kept", j["profile_url"] == "https://register.cpso.on.ca/physician-info/?cpsonum=123456", str(j))
+agent_returning({**FOUND, "profile_url": "https://evil.example/fake"})
+code, j = verify("Jane Smith", "Ottawa")
+check("other links are still dropped", j["profile_url"] is None, str(j))
+
+# ---- the register's own search (the normal path: a few seconds, no agent)
+os.environ["TINYFISH_API_KEY"] = "fake"
+n_goals = len(goals)
+DOC = {"name": "Adebola, Abiola Victor", "cpsonumber": "283353", "specialties": "Family Medicine ", "city": "London",
+       "street1": "unit 105-1599 Adelaide Street North", "registrationstatus": "Active"}
+register_returning({"totalcount": 1, "results": [DOC]})
+code, j = verify("Dr. Abiola Adebola", "London")
+check("register: active doctor verified without an agent", code == 200 and j["verified"] is True and j["lookup_status"] == "found"
+      and len(goals) == n_goals and set(j) == KEYS, str(j))
+check("register: searched by first + last name", searches[-1] == ("Abiola", "Adebola"), str(searches[-1]))
+check("register: number, specialty, profile link", j["cpso_number"] == "283353" and j["specialty"] == "Family Medicine"
+      and j["profile_url"] == "https://register.cpso.on.ca/physician-info/?cpsonum=283353", str(j))
+check("register: notes say where they practise", "Adelaide" in j["notes"] and "London" in j["notes"], j["notes"])
+register_returning({"totalcount": 1, "results": [{**DOC, "registrationstatus": "Expired"}]})
+code, j = verify("Abiola Adebola", "London")
+check("register: expired is found but not verified", j["verified"] is False and j["lookup_status"] == "found" and "Expired" in j["notes"], str(j))
+register_returning({"totalcount": 0, "results": []})
+code, j = verify("Nobody Real", "London")
+check("register: no match -> not_found", j["lookup_status"] == "not_found" and j["verified"] is False, str(j))
+register_returning({"totalcount": 2, "results": [{**DOC, "city": "Toronto", "cpsonumber": "1"}, {**DOC, "cpsonumber": "2"}]})
+code, j = verify("Abiola Adebola", "London")
+check("register: two matches, one in the city -> that one", j["cpso_number"] == "2", str(j))
+register_returning({"totalcount": 2, "results": [{**DOC, "cpsonumber": "1"}, {**DOC, "cpsonumber": "2"}]})
+code, j = verify("Abiola Adebola", "London")
+check("register: two in the same city -> not guessed", j["verified"] is False and j["cpso_number"] is None and "can't tell" in j["notes"], str(j))
+register_returning({"totalcount": -1, "results": []})
+code, j = verify("A Smith", "London")
+check("register: too many matches -> asks for the full name", j["lookup_status"] == "not_found" and "Too many" in j["notes"], str(j))
+register_returning(None)
+agent_returning(FOUND)
+code, j = verify("Jane Smith", "Kingston")
+check("register unreachable -> TinyFish agent backup", j["lookup_status"] == "found" and len(goals) == n_goals + 1, str(j))
 
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))
