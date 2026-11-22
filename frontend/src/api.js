@@ -116,6 +116,7 @@ export const api = {
   applyStream: (waitlistUrl, patientInfo, onEvent, signal) =>
     streamPost("/api/apply/stream", { waitlist_url: waitlistUrl, patient_info: patientInfo }, onEvent, signal),
   feedback: (body) => request("POST", "/api/feedback", { body }),
+  locate: (postalCode) => request("GET", "/api/locate", { query: { postal_code: postalCode } }),
   verifyDoctor: (doctorName, city) => request("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),
   addWatch: (clinic, userEmail) =>
     request("POST", "/api/watch", {

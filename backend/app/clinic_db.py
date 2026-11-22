@@ -4,7 +4,6 @@ Clinic details (name, address, map location) rarely change; availability does. S
 only re-check clinics that are out of date (see refresh.py). No FastAPI code here.
 """
 import contextlib
-import json
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -260,56 +259,12 @@ def set_location(url: str, lat: float | None, lng: float | None) -> None:
         conn.execute("UPDATE clinics SET lat=?, lng=? WHERE url_key=? AND lat IS NULL", (lat, lng, url_key(url)))
 
 
+def get_meta(key: str) -> str | None:
+    with contextlib.closing(connect()) as conn:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
 def set_meta(key: str, value: str) -> None:
     with contextlib.closing(connect()) as conn, conn:
         conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
-
-
-# ---------- seeding ----------
-
-def seed_if_empty(seed_path: Path, cache_path: Path, default_urls: list[str]) -> int:
-    """Fill an empty database from seed_clinics.json, the saved demo scan and the default London clinics.
-    Returns how many clinics were added (0 if the database already had any)."""
-    if count():
-        return 0
-    added = 0
-
-    def load(path: Path) -> tuple[list[dict], str | None]:
-        """(clinics, when the file's results were saved). The file's own date, never its mtime: a fresh checkout
-        would make old results look "checked just now". No date means the results count as expired."""
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            clinics = [c for c in data.get("clinics", []) if isinstance(c, dict) and c.get("url")]
-            return clinics, data.get("saved_at") or data.get("generated_at")
-        except Exception:
-            return [], None
-
-    for path in (seed_path, cache_path):
-        clinics, default_checked = load(path)
-        for c in clinics:
-            if (c.get("raw_notes") or "").startswith(("scan failed", "scan error")):
-                continue
-            city = c.get("city") or "London, ON"
-            if not add_url(c["url"], city, c.get("name"), source="seed"):
-                continue
-            added += 1
-            if c.get("status") in STATUSES:
-                with contextlib.closing(connect()) as conn, conn:
-                    conn.execute(
-                        "UPDATE clinics SET status=?, evidence_quote=?, waitlist_url=?, raw_notes=?, address=?, lat=?, lng=?, "
-                        "checked_via=?, last_checked=? WHERE url_key=?",
-                        (c["status"], c.get("evidence_quote") or "", c.get("waitlist_url"), c.get("raw_notes") or "",
-                         c.get("address"), c.get("lat"), c.get("lng"), c.get("checked_via") or "saved",
-                         c.get("last_checked") or default_checked, url_key(c["url"])),
-                    )
-    for url in default_urls:
-        added += add_url(url, "London, ON", source="seed")
-    return added
-
-
-def export_rows() -> list[dict]:
-    """Every checked clinic, for writing a new seed_clinics.json."""
-    with contextlib.closing(connect()) as conn:
-        rows = [dict(r) for r in conn.execute("SELECT * FROM clinics WHERE status IS NOT NULL ORDER BY city_key, name").fetchall()]
-    keep = ("url", "name", "city", "status", "evidence_quote", "waitlist_url", "raw_notes", "address", "lat", "lng", "checked_via", "last_checked")
-    return [{k: r.get(k) for k in keep} for r in rows]

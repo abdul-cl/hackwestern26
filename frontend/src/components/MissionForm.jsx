@@ -1,4 +1,6 @@
-import { Clock, Info, Loader2, Rocket, Square } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Clock, Info, Loader2, MapPin, Rocket, Square } from "lucide-react";
+import { api } from "../api";
 import { COVERAGE_LABELS, COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS } from "../config";
 
 /** The mission search bar. Controlled by the page (values / onChange) so other views can reuse the same email/postal code. */
@@ -12,6 +14,31 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
     onChange({ ...values, maxClinics: raw === "" ? "" : Math.max(1, Math.min(MAX_CLINICS, Math.round(Number(raw)) || 1)) });
   };
 
+  // A full postal code fills in its city (any Ontario city), so the search always runs where the patient lives.
+  const [cityFromPostal, setCityFromPostal] = useState(null);
+  const postal = values.postalCode;
+  useEffect(() => {
+    const code = (postal || "").trim();
+    if (!/^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$/.test(code)) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      api
+        .locate(code)
+        .then((r) => {
+          if (!live || !r.city) return;
+          setCityFromPostal(r.city);
+          onChange((s) => (s.city.trim().toLowerCase() === r.city.toLowerCase() ? s : { ...s, city: r.city }));
+        })
+        .catch(() => {});
+    }, 450);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postal]);
+  const cityMatchesPostal = cityFromPostal && values.city.trim().toLowerCase() === cityFromPostal.toLowerCase();
+
   const submit = (e) => {
     e.preventDefault();
     if (!running) onLaunch();
@@ -22,11 +49,14 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <div className="col-span-2 md:col-span-1">
           <label className="label" htmlFor="city">City</label>
-          <input id="city" className="input" value={values.city} onChange={set("city")} placeholder="London, ON" required />
+          <input id="city" className="input" value={values.city} onChange={set("city")} placeholder="Toronto, ON" required />
+          {cityMatchesPostal && (
+            <p className="mt-1 flex animate-row-in items-center gap-1 text-[11px] text-slate-500"><MapPin className="h-3 w-3" /> From your postal code</p>
+          )}
         </div>
         <div>
           <label className="label" htmlFor="postal">Postal Code</label>
-          <input id="postal" className="input" value={values.postalCode} onChange={set("postalCode")} placeholder="N6A 3K7" />
+          <input id="postal" className="input" value={values.postalCode} onChange={set("postalCode")} placeholder="M5V 3L9" autoComplete="postal-code" />
         </div>
         <div>
           <label className="label" htmlFor="coverage">Health coverage</label>

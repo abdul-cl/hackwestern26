@@ -256,5 +256,15 @@ check("admin: every answer with its comment, newest first", r.status_code == 200
 config.PUBLIC_DEMO, config.PUBLIC_APPLY, config.PUBLIC_APPLY_PER_DAY, config.ADMIN_KEY = False, True, 40, ""
 check("local (no admin key set): comments readable", client.get("/api/feedback").status_code == 200)
 
+# ---- any Ontario city: postal code -> city
+async def toronto(code):
+    return {"lat": 43.64, "lng": -79.39, "display_name": "M5V 3L9, Toronto", "city": "Toronto, ON"}
+geo.geocode_postal_code = toronto
+j = client.get("/api/locate", params={"postal_code": "m5v3l9"}).json()
+check("locate: postal code -> city", j == {"postal_code": "M5V 3L9", "city": "Toronto, ON", "found": True}, str(j))
+check("locate: partial code -> nothing", client.get("/api/locate", params={"postal_code": "M5V"}).json()["found"] is False)
+geo.geocode_postal_code = no_geo
+
+
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))
 sys.exit(1 if fails else 0)

@@ -89,6 +89,39 @@ async def replay_events(replay: dict, city: str, user_task, limit: int, clinics:
         yield common.sse(ev)
 
 
+_new_city_searches: list[float] = []  # when public new-city searches ran (for PUBLIC_NEW_CITIES_PER_DAY)
+
+
+def new_city_allowed() -> bool:
+    now = time.monotonic()
+    _new_city_searches[:] = [t for t in _new_city_searches if now - t < 86_400]
+    if len(_new_city_searches) >= config.PUBLIC_NEW_CITIES_PER_DAY:
+        return False
+    _new_city_searches.append(now)
+    return True
+
+
+async def _value(v):
+    return v
+
+
+def tinyfish_ready() -> bool:
+    try:
+        config.require_key("TINYFISH_API_KEY")
+        return True
+    except Exception:
+        return False
+
+
+def web_search_due(city: str) -> bool:
+    """Saved-results searches: has this city's web search not run in the last WEB_SEARCH_COOLDOWN_H hours?"""
+    last = clinic_db.parse_iso(clinic_db.get_meta("websearch:" + clinic_db.city_key(city)))
+    if not last:
+        return True
+    from datetime import datetime, timezone
+    return (datetime.now(timezone.utc) - last).total_seconds() > config.WEB_SEARCH_COOLDOWN_H * 3600
+
+
 @router.post("/api/mission/stream")
 async def mission_stream(req: models.MissionRequest, request: Request):
     """Flagship: Scout (clinic database, web search only when it needs more) -> re-check out-of-date clinics
@@ -96,7 +129,9 @@ async def mission_stream(req: models.MissionRequest, request: Request):
     Streams SSE events for every stage and ALWAYS ends with a done event, even if a stage fails."""
     if req.user_email and "@" not in req.user_email:
         raise HTTPException(status_code=422, detail="user_email must be a valid email address.")
-    city = req.city.strip() or "London, ON"
+    # The patient's location (and, with no city given, their city) comes from their postal code.
+    patient_loc = await scanning.user_location(req.user_postal_code)
+    city = req.city.strip() or (patient_loc or {}).get("city") or "London, ON"
     limit = max(1, min(req.max_clinics, config.MAX_MISSION_CLINICS))
     refresh_mode = req.refresh if req.refresh in ("auto", "all", "none") else "auto"
     public = config.public_restricted(request)
@@ -104,15 +139,21 @@ async def mission_stream(req: models.MissionRequest, request: Request):
 
     # Demo searches replay a recording of a real live search when there is one (so the agents' work is visible).
     replay = load_replay(city) if saved_only and refresh_mode != "none" and not (req.clinic_urls and not public) else None
-    # Saved-only searches never go live. With nothing saved they fall back to the demo cache; a public visitor gets a 503.
+    # Saved-only searches (demo mode, public demo) use the clinic database. A city with nothing saved yet is searched
+    # live instead: TinyFish finds its clinics and checks them (browser agents when a site needs one), and the results
+    # are saved for the next search. The saved London backup (fallback_cache.json) is only ever used for London.
     fallback = None
+    new_city = False
     if saved_only and not replay and not clinic_db.nearby(city, None, 1, include_unchecked=False):
-        fallback = cache.load_cache()
+        london = clinic_db.city_key(city) == "london"
+        fallback = cache.load_cache() if london else None
         if not fallback:
+            if public and not new_city_allowed():
+                raise HTTPException(status_code=429, detail=f"CareScout hasn't searched {city} yet, and today's limit of new-city searches on the public demo is used up. Try again tomorrow.")
+            print(f"[mission] nothing saved for {city}; searching it live")
+            saved_only, new_city = False, True
             if public:
-                raise HTTPException(status_code=503, detail="The demo results aren't available right now. Try again later.")
-            print("[mission] nothing saved for this city and no demo cache; running live")
-            saved_only = False
+                limit = min(limit, config.PUBLIC_NEW_CITY_MAX)
     if not saved_only:
         config.require_key("TINYFISH_API_KEY")  # fail with a JSON 500 before the stream starts
     # Own URLs are a live feature: the public demo ignores them (they'd be stored in the shared clinic database).
@@ -129,7 +170,7 @@ async def mission_stream(req: models.MissionRequest, request: Request):
         watched: list[dict] = []
         tasks: list[asyncio.Task] = []
         counts = {"from_database": 0, "rechecked": 0}
-        user_task = asyncio.create_task(scanning.user_location(req.user_postal_code))
+        user_task = asyncio.create_task(_value(patient_loc))  # looked up once, before the stream started
         agents.search_started()  # background re-checks stop using browser agents until this search ends
         try:
             if replay:
@@ -139,6 +180,9 @@ async def mission_stream(req: models.MissionRequest, request: Request):
             else:
                 # ---- Stage 1: Scout (database first, web search only for more) ----
                 yield common.sse({"type": "stage", "stage": "discover", "message": f"Scout Agent looking for clinics in {city}..."})
+                if new_city:
+                    yield common.sse({"type": "stage", "stage": "discover", "message":
+                                      f"CareScout hasn't searched {city} before: TinyFish is searching the web for its clinics and will check each one live (this first search takes a minute or two; the results are saved for next time)."})
                 urls: list[str] = []
                 try:
                     if fallback:
@@ -154,18 +198,24 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                         except Exception:
                             user_loc = None
                         rows = clinic_db.nearby(city, user_loc, limit, include_unchecked=not saved_only)
-                        if saved_only:
+                        # Fewer clinics saved than asked for: TinyFish looks for more and the new ones are checked live
+                        # (saved-results mode too, at most once per city per WEB_SEARCH_COOLDOWN_H, within the public
+                        # daily limit). Every search adds what the database doesn't have yet.
+                        top_up = len(rows) < limit and (not saved_only or (
+                            tinyfish_ready() and web_search_due(city) and (not public or new_city_allowed())))
+                        if saved_only and not top_up:
                             yield common.sse({"type": "stage", "stage": "discover",
                                               "message": f"Using saved results for {len(rows)} clinics from the CareScout database."})
-                        elif len(rows) < limit:
+                        elif top_up:
                             yield common.sse({"type": "stage", "stage": "discover", "message":
-                                              f"{len(rows)} clinics in the CareScout database; searching the web for more..."})
+                                              f"{len(rows)} clinics in the CareScout database; TinyFish is searching the web for more..."})
                             try:
                                 want = min(20, limit - len(rows) + 3)
                                 task = asyncio.create_task(asyncio.to_thread(discovery.discover, models.DiscoverRequest(city=city, max_results=want)))
                                 async for ka in common.wait_with_keepalive(task):
                                     yield ka
                                 new = sum(clinic_db.add_url(u, city) for u in task.result()["clinic_urls"])
+                                clinic_db.set_meta("websearch:" + clinic_db.city_key(city), clinic_db.now_iso())
                                 if new:
                                     yield common.sse({"type": "stage", "stage": "discover", "message": f"Added {new} new clinic websites to the database."})
                             except Exception as e:
@@ -174,6 +224,9 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                                 for u in config.DEFAULT_CLINIC_URLS:
                                     clinic_db.add_url(u, city, source="seed")
                             rows = clinic_db.nearby(city, user_loc, limit, include_unchecked=True)
+                            if public:  # visitors: at most PUBLIC_NEW_CITY_MAX not-yet-checked clinics per search
+                                fresh_rows = [r for r in rows if r.get("status")]
+                                rows = fresh_rows + [r for r in rows if not r.get("status")][: config.PUBLIC_NEW_CITY_MAX]
                         else:
                             yield common.sse({"type": "stage", "stage": "discover", "message": f"Found {len(rows)} clinics in the CareScout database."})
                         urls = [r["url"] for r in rows]
@@ -185,13 +238,16 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                 rows_by_url = {u: clinic_db.get(u) for u in urls}
                 if fallback:
                     fresh, stale = [], []
-                elif saved_only:
-                    fresh, stale = [u for u in urls if (rows_by_url[u] or {}).get("status")], []
+                elif saved_only:  # saved clinics as they are; clinics just found by the web search get checked live
+                    fresh = [u for u in urls if (rows_by_url[u] or {}).get("status")]
+                    stale = [u for u in urls if u not in fresh]
                 else:
                     fresh = [u for u in urls if refresh_mode == "auto" and clinic_db.is_fresh(rows_by_url[u], config.FRESH_HOURS)]
                     stale = [u for u in urls if u not in fresh]
-                if fallback or saved_only:
+                if fallback or (saved_only and not stale):
                     msg = f"Showing {len(urls)} saved clinics."
+                elif saved_only:
+                    msg = f"Showing {len(fresh)} saved clinics; checking {len(stale)} new clinic websites live..."
                 elif not stale:
                     msg = f"All {len(fresh)} clinics were checked in the last {config.FRESH_HOURS:g} hours: no re-check needed."
                 else:

@@ -76,7 +76,7 @@ check("scan forced to saved results (no live agent)", r.status_code == 200 and [
 r = c.post("/api/scan/stream", json={"use_cache": False})
 ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
 check("scan/stream forced to saved results", r.status_code == 200 and ev[-1] == {"type": "done", "total": 2}, r.text[:300])
-r = c.post("/api/mission/stream", json={"use_cache": False, "city": "Toronto"})
+r = c.post("/api/mission/stream", json={"use_cache": False, "city": "London, ON"})
 ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
 check("mission forced to saved results, still ranks", r.status_code == 200 and ev[-1]["type"] == "done"
       and sum(e["type"] == "clinic_scanned" for e in ev) == 2 and len(ranking_calls) == 1, str(ev)[:400])
@@ -110,7 +110,7 @@ check("public: the real watch is untouched", watchdog.get_watch(real_watch["id"]
 before = clinic_db.count()
 r = c.post("/api/mission/stream", json={"clinic_urls": ["https://attacker.example/a", "https://attacker.example/b"], "user_email": "v@x.ca"})
 ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
-check("public mission: visitor URLs are not added to the clinic database", clinic_db.count() == before and clinic_db.get("https://attacker.example/a") is None)
+check("public mission: visitor URLs are not added to the clinic database", clinic_db.get("https://attacker.example/a") is None and clinic_db.get("https://attacker.example/b") is None)
 check("public mission: a visitor's own email is not auto-watched",
       any(e["type"] == "stage" and e["stage"] == "watch" and "demo account" in e["message"] for e in ev) and not any(e["type"] == "watched" for e in ev), str(ev)[-400:])
 r = c.post("/api/mission/stream", json={"user_email": DEMO})
@@ -135,9 +135,20 @@ check("watch list allowed", c.get("/api/watch").status_code == 200)
 # --- missing saved results: a clear 503, never a silent live scan
 saved = config.CACHE_PATH.read_text(encoding="utf-8")
 config.CACHE_PATH.unlink()
-for path in ("/api/scan", "/api/scan/stream", "/api/mission/stream"):
-    r = c.post(path, json={"city": "Nowhere, ON"} if "mission" in path else {})  # a city with nothing in the database
+for path in ("/api/scan", "/api/scan/stream"):
+    r = c.post(path, json={})
     check(f"503 without saved results: {path}", r.status_code == 503 and "demo results" in r.json()["detail"], r.text)
+# a city CareScout hasn't searched yet: searched live for visitors too (web search + checks), within a daily limit
+from app import orchestrator
+orchestrator._new_city_searches.clear()
+config.PUBLIC_NEW_CITIES_PER_DAY = 1
+r = c.post("/api/mission/stream", json={"city": "Nowhere, ON"})
+ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
+check("public: a new city is searched live (never another city's results)", r.status_code == 200
+      and any("hasn't searched Nowhere" in e.get("message", "") for e in ev) and not any("Demo mode" in e.get("message", "") for e in ev), str(ev)[:300])
+r = c.post("/api/mission/stream", json={"city": "Otherplace, ON"})
+check("public: new-city searches have a daily limit (429)", r.status_code == 429 and "new-city searches" in r.json()["detail"], r.text)
+config.PUBLIC_NEW_CITIES_PER_DAY = 20
 config.CACHE_PATH.write_text(saved, encoding="utf-8")
 
 # --- admin key unlocks live agents

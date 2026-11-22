@@ -1,6 +1,7 @@
 """CareScout API: app setup (auth, CORS, errors, lifespan). Each feature lives in its own module."""
 import asyncio
 import contextlib
+from pathlib import Path
 import os
 import secrets
 
@@ -140,12 +141,13 @@ def public_guard(request: Request):
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    if config.SEED_ON_START:
-        try:
-            added = clinic_db.seed_if_empty(config.SEED_PATH, config.CACHE_PATH, config.DEFAULT_CLINIC_URLS)
-            print(f"[startup] clinic database: {clinic_db.count()} clinics" + (f" ({added} loaded from seed files)" if added else ""))
-        except Exception as e:  # a broken seed file must never stop the API
-            print(f"[startup] clinic database seeding failed: {type(e).__name__}: {e}")
+    # Nothing is preloaded: the clinic database only fills from real searches (TinyFish finds a city's clinics the
+    # first time someone searches it).
+    try:
+        have = clinic_db.count() if Path(clinic_db.DB_PATH).exists() else 0  # don't create the file just to count it
+        print(f"[startup] clinic database: {have} clinics" + ("" if have else " (fills up as people search)"))
+    except Exception as e:
+        print(f"[startup] clinic database not readable yet: {type(e).__name__}: {e}")
     tasks = []
     if config.WATCHDOG_INTERVAL_MIN > 0:
         tasks.append(asyncio.create_task(watch_api.watchdog_loop()))

@@ -3,7 +3,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from . import config, common, models, clinic_db, refresh, scanning, discovery
+from . import config, common, models, clinic_db, refresh, scanning, discovery, geo
 
 router = APIRouter()
 _background: set[asyncio.Task] = set()  # keep references so background re-checks aren't garbage-collected
@@ -42,6 +42,17 @@ async def refresh_clinic(req: models.RefreshRequest):
     result = await refresh.check_url(url, req.city, allow_agent=True, force=True)
     clinic = await refresh.locate_and_store(result["clinic"], req.city, user_task)
     return {"clinic": clinic, "method": result["method"], "status_changed": result["status_changed"], "error": result["error"]}
+
+
+@router.get("/api/locate")
+async def locate(postal_code: str):
+    """Full Ontario postal code -> the patient's city, so the search form can fill it in:
+    {"postal_code": "M5V 3L9", "city": "Toronto, ON" | null, "found": bool}. Instant after the first lookup."""
+    code = geo.normalize_postal_code(postal_code)
+    if not code:
+        return {"postal_code": None, "city": None, "found": False}
+    place = await scanning.user_location(code)
+    return {"postal_code": code, "city": (place or {}).get("city"), "found": bool(place)}
 
 
 @router.post("/api/clinics/seed")
