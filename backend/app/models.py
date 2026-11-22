@@ -26,6 +26,7 @@ class PatientInfo(BaseModel):
     email: str = Field(max_length=200)
     phone: str = Field(max_length=40)
     postal_code: str = Field(max_length=12)
+    visit_reason: str | None = Field(None, max_length=500)  # optional: symptoms / why they want a family doctor
 
 
 class ApplyRequest(BaseModel):
@@ -44,6 +45,7 @@ class RankedClinic(BaseModel):
     phone_number: str | None = None
     call_hours: str | None = None
     call_script: str | None = None
+    posted_wait: str | None = None  # a wait time the clinic itself posts (e.g. "about 6 months"), never estimated
 
 
 class RankResponse(BaseModel):

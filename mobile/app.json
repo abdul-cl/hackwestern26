@@ -43,6 +43,12 @@
         {
           "faceIDPermission": "CareScout uses Face ID to unlock the details you saved for filling in waitlist forms."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0F6B58"
+        }
       ]
     ],
     "scheme": "carescout",

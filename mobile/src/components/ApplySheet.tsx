@@ -39,6 +39,8 @@ type BodyProps = { clinic: MergedClinic; defaults: Search; onClose: () => void; 
 function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
   const { publicDemo } = useAppState();
   const [form, setForm] = useState<PatientInfo>({ name: "", email: defaults.email || "", phone: "", postal_code: defaults.postalCode || "" });
+  // kept apart from the saved details on purpose: health info is never stored on the phone
+  const [reason, setReason] = useState("");
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +85,8 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
         await saveDetails(form).catch(() => {});
         setVault((v) => ({ ...v, hasSaved: true }));
       }
-      setResult(await api.apply(clinic.waitlist_url, form));
+      const r = reason.trim();
+      setResult(await api.apply(clinic.waitlist_url, r ? { ...form, visit_reason: r } : form));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -141,6 +144,23 @@ function ApplyBody({ clinic, defaults, onClose, onBusy, busy }: BodyProps) {
               <View style={{ flex: 1 }}>
                 <Field label="Postal code" value={form.postal_code} onChange={set("postal_code")} max={12} auto="postal-code" caps />
               </View>
+            </View>
+            <View>
+              <Label>Reason for your visit (optional)</Label>
+              <TextInput
+                style={[styles.input, styles.reason]}
+                value={reason}
+                onChangeText={setReason}
+                maxLength={500}
+                multiline
+                textAlignVertical="top"
+                placeholder="e.g. Need a family doctor for ongoing asthma care and prescription refills"
+                placeholderTextColor={colors.faint}
+                accessibilityLabel="Reason for your visit, optional"
+              />
+              <T variant="small" style={{ marginTop: 6 }}>
+                Only goes into the clinic's form if it has a box for it. Not saved on your phone. {reason.length}/500
+              </T>
             </View>
             {vault.canSave && !vault.hasSaved && (
               <View style={styles.remember}>
@@ -254,6 +274,7 @@ function Result({ result, onOpen, onRetry }: { result: ApplyResult; onOpen: () =
 }
 
 const styles = StyleSheet.create({
+  reason: { minHeight: 88, paddingTop: 12 },
   backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(9, 25, 21, 0.45)" },
   sheetWrap: { flex: 1, justifyContent: "flex-end" },
   sheet: {

@@ -142,6 +142,16 @@ function ClinicCard(props: Props) {
                   <T variant="bodyStrong" style={{ flex: 1, color: colors.pineDeep }}>{clinic.next_step}</T>
                 </View>
               )}
+              {!!clinic.posted_wait && (
+                // only ever what the clinic posts itself, so it's labelled that way
+                <View style={styles.wait}>
+                  <Ionicons name="hourglass-outline" size={14} color={colors.ink} />
+                  <T variant="small" style={{ flex: 1, color: colors.ink }}>
+                    <T style={{ fontFamily: fonts.bodySemi, fontSize: 13, color: colors.ink }}>Wait posted by the clinic: </T>
+                    {clinic.posted_wait}
+                  </T>
+                </View>
+              )}
               {clinic.requirements?.map((r) => (
                 <T key={r} variant="small">· {r}</T>
               ))}
@@ -249,6 +259,7 @@ function Chip({ icon, text, onPress, on, disabled }: { icon: any; text: string; 
 export default memo(ClinicCard);
 
 const styles = StyleSheet.create({
+  wait: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.mist, paddingVertical: 7, paddingHorizontal: 10, borderRadius: radius.sm },
   card: { gap: 12 },
   cardOn: { borderColor: colors.pine, borderWidth: 2, margin: -1 },
   top: { flexDirection: "row", gap: 14, alignItems: "center" },

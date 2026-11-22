@@ -142,7 +142,8 @@ app.add_middleware(
 @app.get("/health")
 def health(request: Request):
     # public_demo tells the website to show saved results only (live agents unlock with the admin key)
-    return {"status": "ok", "public_demo": config.public_restricted(request)}
+    # email_alerts tells the apps whether opening alerts also go out by email
+    return {"status": "ok", "public_demo": config.public_restricted(request), "email_alerts": config.email_alerts_enabled()}
 
 
 app.include_router(scanning.router)

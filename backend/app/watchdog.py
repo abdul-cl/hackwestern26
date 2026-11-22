@@ -36,6 +36,9 @@ def connect() -> sqlite3.Connection:
         "id INTEGER PRIMARY KEY AUTOINCREMENT, watch_id INTEGER, clinic_name TEXT, url TEXT, user_email TEXT, "
         "old_status TEXT, new_status TEXT, evidence_quote TEXT, message TEXT, simulated INTEGER DEFAULT 0, created_at TEXT)"
     )
+    # each phone asks for its own alerts every minute, so look them up by email without scanning the table
+    conn.execute("CREATE INDEX IF NOT EXISTS alerts_by_email ON alerts(user_email, id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS watches_by_email ON watches(user_email)")
     conn.commit()
     return conn
 
@@ -107,6 +110,9 @@ def save_alerts(alerts: list[dict], raw_emails: dict[int, str], simulated: bool 
                 (a["id"], a["clinic_name"], a["url"], raw_emails.get(a["id"], a["user_email"]), a["old_status"],
                  a["new_status"], a.get("evidence_quote", ""), a["message"], int(simulated), stamp),
             )
+    # real email for openings (does nothing without RESEND_API_KEY; simulated ones only with EMAIL_DEMO_ALERTS=1)
+    from . import email_alerts
+    email_alerts.send_opening_alerts(alerts, raw_emails, simulated)
 
 
 def list_alerts(user_email: str | None = None, limit: int = 20) -> list[dict]:

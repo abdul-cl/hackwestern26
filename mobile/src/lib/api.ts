@@ -1,7 +1,7 @@
 // Every backend call goes through here, same as frontend/src/api.js
 import { fetch as expoFetch } from "expo/fetch";
 import { API_BASE_URL, API_KEY } from "./config";
-import type { ApplyResult, Clinic, DoctorVerification, MissionEvent, MissionRequest, PatientInfo, Watch, WatchAlert } from "./types";
+import type { ApplyResult, Clinic, DoctorVerification, MissionEvent, MissionRequest, PatientInfo, RankedClinic, Watch, WatchAlert } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -131,13 +131,23 @@ export async function streamPost(
 }
 
 export const api = {
-  health: () => request<{ status: string; public_demo: boolean }>("GET", "/health"),
+  health: () => request<{ status: string; public_demo: boolean; email_alerts?: boolean }>("GET", "/health"),
   missionStream: (body: MissionRequest, onEvent: (e: MissionEvent) => void, signal?: AbortSignal) =>
     streamPost("/api/mission/stream", body, onEvent, signal),
   apply: (waitlistUrl: string, patientInfo: PatientInfo) =>
     request<ApplyResult>("POST", "/api/apply", { body: { waitlist_url: waitlistUrl, patient_info: patientInfo } }),
   verifyDoctor: (doctorName: string, city: string) =>
     request<DoctorVerification>("POST", "/api/verify-doctor", { body: { doctor_name: doctorName, city } }),
+  // saved clinics for a city, straight from the database (no agents), used to show results instantly
+  listClinics: (city: string, postalCode: string | null, limit: number, includeUnchecked = false) =>
+    request<{ clinics: Clinic[] }>("GET", "/api/clinics", {
+      query: { city, postal_code: postalCode || undefined, limit, include_unchecked: includeUnchecked ? "true" : undefined },
+    }),
+  // re-ranks a whole list together, used after "Load more" so old and new clinics are scored side by side
+  rank: (clinics: Clinic[], language: string, coverageType: string) =>
+    request<{ ranked_clinics: RankedClinic[] }>("POST", "/api/rank", {
+      body: { clinics, language, coverage_type: coverageType, preferences: [] },
+    }),
   addWatch: (clinic: Pick<Clinic, "name" | "url" | "status">, userEmail: string) =>
     request("POST", "/api/watch", {
       body: { clinic_name: clinic.name, url: clinic.url, last_status: clinic.status, user_email: userEmail },

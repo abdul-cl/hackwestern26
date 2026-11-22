@@ -18,7 +18,9 @@ GOAL = (
     "what a patient needs to join (e.g. health card, ID), "
     "the clinic phone number, the hours to call or register, "
     "languages spoken, whether OHIP / UHIP / uninsured patients are accepted, "
-    "and whether it is phone-only or has an online form). Only include what the page actually states; never guess."
+    "whether it is phone-only or has an online form, "
+    "and any wait time the page posts, such as how long the waitlist is or the current walk-in wait). "
+    "Only include what the page actually states; never guess."
 )
 
 

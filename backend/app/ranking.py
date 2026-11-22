@@ -29,6 +29,8 @@ def rank(req: models.RankRequest):
         "[\"UHIP Friendly\"], or [\"Check Eligibility\"] when the notes do not say). "
         "phone_number (the clinic's phone number copied from raw_notes or evidence_quote, else null), "
         "call_hours (when to call, e.g. \"Mon-Fri, 8am-4pm\", from the notes, else null), "
+        "posted_wait (a wait time the clinic itself states in its notes, e.g. \"Waitlist is about 6 months\" or "
+        "\"Walk-in wait around 45 min\", copied in English, else null; never estimate or guess a wait), "
         "call_script (ONLY when the clinic's waitlist_url is null, else null: a natural 2-3 sentence phone script "
         f"in {req.language} the patient can read word for word to ask about joining as a new patient, "
         f"then a blank line, then a heading meaning 'Have ready:' written in {req.language} "

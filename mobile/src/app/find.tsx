@@ -18,10 +18,11 @@ import ApplySheet from "@/components/ApplySheet";
 import ClinicCard from "@/components/ClinicCard";
 import ClinicMap from "@/components/ClinicMap";
 import HandoffSheet from "@/components/HandoffSheet";
+import HealthCareConnect from "@/components/HealthCareConnect";
 import MissionForm from "@/components/MissionForm";
 import { Reveal } from "@/components/motion";
-import { Card, Ionicons, T } from "@/components/ui";
-import { displayStatus, mergeClinics } from "@/lib/clinics";
+import { Button, Card, ChipSelect, Ionicons, T } from "@/components/ui";
+import { COVERAGE_FILTERS, displayStatus, matchesCoverage, mergeClinics, type CoverageFilter } from "@/lib/clinics";
 import { searchFromParams, type HandoffParams } from "@/lib/handoff";
 import { savedAgo } from "@/lib/storage";
 import { colors, fonts, radius } from "@/lib/theme";
@@ -41,7 +42,7 @@ function EmptyState() {
 }
 
 export default function FindScreen() {
-  const { search, setSearch, mission, launch, publicDemo, refreshWatchCount, savedAt, showSaved, backendUp } = useAppState();
+  const { search, setSearch, mission, launch, loadMore, publicDemo, refreshWatchCount, savedAt, showSaved, backendUp } = useAppState();
   const { state, stop, reset, updateClinic } = mission;
   const params = useLocalSearchParams<HandoffParams>();
   const scroll = useRef<Animated.ScrollView>(null);
@@ -52,6 +53,7 @@ export default function FindScreen() {
   const [applyFor, setApplyFor] = useState<MergedClinic | null>(null);
   const [showMap, setShowMap] = useState(true);
   const [handoff, setHandoff] = useState(false);
+  const [coverage, setCoverage] = useState<CoverageFilter>("All");
 
   // a light buzz each time a clinic comes back accepting, and a success buzz when the search finishes.
   // `buzzed` remembers which clinics already buzzed this run, and resets when a new search starts
@@ -73,7 +75,14 @@ export default function FindScreen() {
     if (state.summary && !state.restoredAt) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [state.summary, state.restoredAt]);
 
-  const clinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
+  const allClinics = useMemo(() => mergeClinics(state.scanned, state.urls, state.ranked), [state.scanned, state.urls, state.ranked]);
+  // coverage filter: based on what each clinic's own website says, so clinics that don't say are hidden by it
+  const clinics = useMemo(() => allClinics.filter((c) => matchesCoverage(c, coverage)), [allClinics, coverage]);
+  const hiddenByFilter = allClinics.length - clinics.length;
+  // saved results from the database, shown while the agents confirm them (dropped once each comes back)
+  const preview = useMemo(() => state.preview.map((c) => ({ ...c, ranked: false }) as MergedClinic), [state.preview]);
+  const accepting = allClinics.filter((c) => displayStatus(c) === "accepting").length;
+  const finished = !state.running && state.log.length > 0;
   const hasPins = clinics.some((c) => typeof c.lat === "number" && typeof c.lng === "number");
 
   // links like carescout://find?city=...&postal=...&coverage=...&language=...&demo=1 fill in the form
@@ -189,7 +198,7 @@ export default function FindScreen() {
           )}
 
           <View onLayout={(e) => (resultsY.current = e.nativeEvent.layout.y)}>
-            {clinics.length > 0 ? (
+            {allClinics.length + preview.length > 0 ? (
               <View style={{ gap: 12 }}>
                 {state.restoredAt && !state.running && (
                   // these came from storage, not a live search, so say how old they are
@@ -205,7 +214,7 @@ export default function FindScreen() {
                 )}
                 <View style={styles.resultsHead}>
                   <T variant="h2" style={{ flex: 1 }}>
-                    {state.ranked ? "Best matches first" : "Results so far"} <T style={styles.count}>{clinics.length}</T>
+                    {state.ranked ? "Best matches first" : "Results so far"} <T style={styles.count}>{clinics.length || preview.length}</T>
                   </T>
                   {hasPins && (
                     <Pressable
@@ -220,6 +229,29 @@ export default function FindScreen() {
                     </Pressable>
                   )}
                 </View>
+
+                {allClinics.length > 0 && (
+                  <View style={{ gap: 6 }}>
+                    <ChipSelect label="Filter by coverage" options={[...COVERAGE_FILTERS]} value={coverage} onChange={(v) => setCoverage(v as CoverageFilter)} />
+                    {coverage !== "All" && (
+                      <T variant="small">
+                        {coverage === "Takes OHIP"
+                          ? "Clinics whose website says they take OHIP."
+                          : "Clinics whose website says they see UHIP, IFHP, uninsured or private-pay patients."}
+                        {hiddenByFilter > 0 ? ` ${hiddenByFilter} hidden, including clinics that don't say.` : ""}
+                      </T>
+                    )}
+                  </View>
+                )}
+
+                {coverage !== "All" && clinics.length === 0 && allClinics.length > 0 && (
+                  <Card style={{ gap: 6, alignItems: "center", paddingVertical: 20 }}>
+                    <Ionicons name="filter-outline" size={22} color={colors.faint} />
+                    <T variant="small" style={{ textAlign: "center", maxWidth: 300 }}>
+                      None of these clinics' websites mention this. Call them to ask, or tap All to see every clinic.
+                    </T>
+                  </Card>
+                )}
 
                 {hasPins && showMap && <ClinicMap clinics={clinics} selectedUrl={selectedUrl} onSelect={selectFromMap} />}
 
@@ -240,7 +272,58 @@ export default function FindScreen() {
                     />
                   </Reveal>
                 ))}
+
+                {preview.length > 0 && (
+                  <View style={{ gap: 12 }}>
+                    <View style={styles.previewHead}>
+                      <Ionicons name="flash-outline" size={15} color={colors.muted} />
+                      <T variant="small" style={{ flex: 1 }}>
+                        From earlier checks. Agents are confirming these now, so they may change.
+                      </T>
+                    </View>
+                    {preview.map((c) => (
+                      <View key={c.url} style={styles.previewCard}>
+                        <ClinicCard
+                          clinic={c}
+                          email={search.email.trim()}
+                          city={search.city}
+                          postalCode={search.postalCode}
+                          publicDemo={publicDemo}
+                          rankingPending
+                          selected={false}
+                          onSelect={setSelectedUrl}
+                          onApply={setApplyFor}
+                          onUpdated={updateClinic}
+                          onWatched={onWatched}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {finished && !state.restoredAt && allClinics.length > 0 && (
+                  <View style={{ gap: 6 }}>
+                    <Button
+                      title={state.loadingMore ? "Checking more clinics..." : "Load 5 more clinics"}
+                      icon="add-circle-outline"
+                      variant="secondary"
+                      onPress={loadMore}
+                      loading={state.loadingMore}
+                      disabled={state.loadingMore || state.noMore}
+                    />
+                    <T variant="small" style={{ textAlign: "center" }}>
+                      {state.noMore
+                        ? "That's every clinic CareScout has for this area. Try a nearby city for more."
+                        : "Only the new clinics get checked, then the whole list is ranked again."}
+                    </T>
+                  </View>
+                )}
+
+                {!state.running && <HealthCareConnect noneAccepting={accepting === 0} />}
               </View>
+            ) : finished && !state.error ? (
+              // the search finished but found nothing at all
+              <HealthCareConnect noneAccepting />
             ) : (
               !state.running && state.log.length === 0 && <EmptyState />
             )}
@@ -313,5 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
+  previewHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2 },
+  previewCard: { opacity: 0.72 },
   saved: { flexDirection: "row", gap: 10, backgroundColor: colors.pineSoft, padding: 14, borderRadius: radius.md },
 });

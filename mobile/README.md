@@ -23,13 +23,36 @@ With no `.env` the app uses `http://10.0.2.2:8000` on the Android emulator and `
 A real phone can't reach either of those, so copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_URL`
 to something it can reach (a cloudflared tunnel or the deployed Railway URL). Restart with `npx expo start -c` after changing it.
 
-## What's where
+## How it's built
 
-- `src/app/` screens (every file is a tab, `_layout.tsx` is the tab bar)
-- `src/components/` form, live feed, clinic cards
-- `src/lib/` API calls, types, colours, clinic helpers
-- `src/hooks/useMission.ts` runs the live search stream
-- `src/state/AppState.tsx` search + mission shared between tabs
+Data flows one way: screens → shared state → hooks → `lib/` → backend. Anything several tabs need goes
+through shared state. One-off actions (auto-fill, verify a doctor, re-check, watch) call `lib/api` straight from
+the component that owns them.
+
+- `src/app/` screens. Every file is a tab, `_layout.tsx` is the tab bar
+- `src/components/` reusable pieces: form, live feed, clinic card, sheets, map
+- `src/state/AppState.tsx` puts the shared hooks together into one context, so a search keeps running when you switch tabs
+- `src/hooks/` one job each:
+  - `useMission` the live search stream, instant previews and "Load more" (a reducer, so every event is one pure update)
+  - `useBackend` /health: online, public demo, email alerts, owner key
+  - `useOpeningAlerts` banner + phone notification, polls for new alerts, each alert only once
+  - `useSavedResults` offline: keeps the form and last results on the phone
+  - `useWatchCount` the Watchdog badge
+- `src/lib/` plain functions with no React: API client, types, clinic helpers (status, merge, coverage),
+  storage, notifications (`notify.ts` on phones, `notify.web.ts` no-op on web), theme
+
+Platform differences stay in `.web.tsx` / `.web.ts` files (map, notifications) instead of `if (web)` checks everywhere.
+
+### Scaling notes
+
+- The backend does the heavy work (agents, ranking, watchdog). The app never calls TinyFish or Gemini, and no
+  secret keys are ever in the app (`EXPO_PUBLIC_` values are visible to anyone)
+- Searches reuse saved clinics: only out-of-date ones are re-checked, "Load more" checks only new ones,
+  and the re-rank sends at most 30 (open clinics first, then closest)
+- Alert polling is one small indexed query per phone per minute, only while the app is open and an email is set.
+  Past a few thousand users this should move to push notifications (Expo push / FCM) from the backend's watchdog
+- Email alerts go out on a 2-worker pool with retries on rate limits, so a clinic with many watchers can't flood Resend
+- The backend uses SQLite, which is fine for one server. Running several servers would mean moving to Postgres
 
 ## What it has (same features as the website)
 
@@ -39,6 +62,14 @@ to something it can reach (a cloudflared tunnel or the deployed Railway URL). Re
 - Opening alert banner, watch count badge on the Watchdog tab, dot on the Find tab while a search runs
 - How it works: the four agents, reading results, privacy + safety, FAQ, owner key for the public deployment
 - `carescout://find?demo=1` (or `/find?demo=1` on web) starts the demo search
+- Instant results: saved clinics from `GET /api/clinics` show up right away (faded, "from earlier checks") while the agents confirm them
+- Load 5 more clinics: checks only clinics that aren't on screen yet (`clinic_urls`), then re-ranks the whole list with `POST /api/rank`
+- Coverage filter on results: All / Takes OHIP / Without OHIP (UHIP, IFHP, uninsured, private pay), based only on what
+  each clinic's website says
+- Wait times: a clinic's own posted wait ("Waitlist is about 6 months") shows on its card. Never estimated
+- Auto-fill has an optional "Reason for your visit" box (max 500). It only goes into a form box made for it and is never saved on the phone
+- Email opening alerts (needs RESEND_API_KEY on the backend): Watchdog says "we'll also email you" when it's on
+- Health Care Connect card after results (louder when nothing is accepting) and on How it works: link to ontario.ca and Call 811
 
 ## Phone-only extras
 
@@ -46,6 +77,10 @@ to something it can reach (a cloudflared tunnel or the deployed Railway URL). Re
 - Directions: opens Apple Maps / Google Maps to the clinic
 - Call-back reminders: "Lines open Monday at 9:00 AM. Remind me?" opens the phone's own new-event screen, filled in
 - Share a clinic through the share sheet (copies it on web)
+- Phone notifications when a watched clinic opens: turn on in Watchdog. With an email set, the app checks for new alerts
+  every minute while open and when you come back to it. Tapping one opens Watchdog. The sparkle (simulate) sends one
+  3 seconds later, so you can leave the app and watch it arrive. In Expo Go nothing is checked while the app is fully closed
+  (that would need a dev build + push)
 - Haptics: light buzz when a clinic comes back accepting, stronger one for an opening alert
 
 ## Privacy + offline

@@ -37,6 +37,16 @@ PUBLIC_DEMO = os.getenv("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes
 ADMIN_KEY = os.getenv("CARESCOUT_ADMIN_KEY", "").strip()  # server-side secret: header X-Admin-Key unlocks live agents
 PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT", "30"))  # requests per visitor per 10 minutes (public mode)
 
+# Real opening alerts by email (optional). Without RESEND_API_KEY, alerts only show in the app.
+# Free tier note: until you verify a domain at resend.com, Resend only delivers to the email your account was made with.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "CareScout <onboarding@resend.dev>").strip()
+EMAIL_DEMO_ALERTS = os.getenv("EMAIL_DEMO_ALERTS", "").strip().lower() in ("1", "true", "yes")  # also email simulated openings
+
+
+def email_alerts_enabled() -> bool:
+    return bool(RESEND_API_KEY) and not RESEND_API_KEY.startswith("your_")
+
 
 def is_admin(request) -> bool:
     """True when the request carries the server's admin key (never put this key in the frontend)."""
