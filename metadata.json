@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.13.5-nightly.202611160626.76f1b5129",
+  "checkpoint_id": "01M809TW9B96W0CJ3FC5FGY375",
+  "strategy": "manual-commit",
+  "branch": "Abdul/frontend",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "CLAUDE.md",
+    "DEPLOY.md",
+    "backend/app/clinic_db.py",
+    "backend/app/clinics_api.py",
+    "backend/app/config.py",
+    "backend/app/geo.py",
+    "backend/app/main.py",
+    "backend/app/orchestrator.py",
+    "backend/seed_clinics.json",
+    "backend/tests/test_clinic_db.py",
+    "backend/tests/test_features.py",
+    "backend/tests/test_geo.py",
+    "backend/tests/test_mission.py",
+    "backend/tests/test_public.py",
+    "backend/tests/test_smoke.py",
+    "frontend/src/api.js",
+    "frontend/src/components/MissionForm.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 148,
+    "cache_creation_tokens": 91933,
+    "cache_read_tokens": 58238207,
+    "output_tokens": 56182,
+    "api_call_count": 66
+  },
+  "redaction": {
+    "replacements": 338,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 115,
+      "credentialed_uri": 0,
+      "entropy": 167,
+      "key_context": 56,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
