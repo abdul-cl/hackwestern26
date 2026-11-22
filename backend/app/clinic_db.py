@@ -4,14 +4,13 @@ Clinic details (name, address, map location) rarely change; availability does. S
 only re-check clinics that are out of date (see refresh.py). No FastAPI code here.
 """
 import contextlib
-import json
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import config
+from . import config, common
 
 DB_PATH = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1]) / "clinics.db"  # same file as watchdog.py
 STATUSES = ("accepting", "waitlist", "closed")
@@ -41,6 +40,24 @@ def url_key(url: str) -> str:
     host = (p.hostname or "").lower().removeprefix("www.")
     path = p.path.rstrip("/")
     return f"{host}{path}" + (f"?{p.query}" if p.query else "")
+
+
+def site_key(url: str) -> str:
+    """The clinic's website (host without www.). One clinic per website in a city: its homepage, locations page and
+    new-patient page are the same clinic, and showing them separately could show one clinic as both open and full."""
+    return (urlparse((url or "").strip()).hostname or "").lower().removeprefix("www.")
+
+
+NEW_PATIENT_WORDS = ("patient", "apply", "become", "intake", "waitlist", "wait-list", "register", "attach", "primary-care")
+
+
+def _best_page(rows: list[dict]) -> dict:
+    """Of several pages of one clinic's website, the one to show: a checked status (not failing) first,
+    then a dedicated new-patient page, then the most recently checked."""
+    def rank(r):
+        path = urlparse(r["url"]).path.lower()
+        return (bool(r.get("status")), not r.get("failing_since"), any(w in path for w in NEW_PATIENT_WORDS), r.get("last_checked") or "")
+    return max(rows, key=rank)
 
 
 def connect() -> sqlite3.Connection:
@@ -128,6 +145,11 @@ def nearby(city: str, user_loc: dict | None, limit: int, include_unchecked: bool
     with contextlib.closing(connect()) as conn:
         rows = [dict(r) for r in conn.execute("SELECT * FROM clinics WHERE city_key = ?", (city_key(city),)).fetchall()]
     rows = [r for r in rows if not is_dead(r)]  # sites that have been down for weeks don't show up in searches
+    rows = [r for r in rows if not common.is_directory_url(r["url"])]  # directories aren't clinics (older databases may have one)
+    by_site: dict[str, list[dict]] = {}
+    for r in rows:
+        by_site.setdefault(site_key(r["url"]), []).append(r)
+    rows = [_best_page(group) for group in by_site.values()]  # one entry per clinic website
     if not include_unchecked:
         rows = [r for r in rows if r.get("status")]
 
@@ -174,7 +196,18 @@ def stats(hours: float) -> dict:
 # ---------- writes ----------
 
 def add_url(url: str, city: str, name: str | None = None, source: str = "discovered") -> bool:
-    """Add a clinic page we haven't seen before (unchecked). Returns True if it was new."""
+    """Add a clinic page we haven't seen before (unchecked). Returns True if it was new. Directories are never added,
+    and neither is another page of a clinic website we already have for this city (e.g. its homepage from a web search
+    when we already track its new-patient page)."""
+    if common.is_directory_url(url):
+        return False
+    site, key = site_key(url), url_key(url)
+    if site:
+        with contextlib.closing(connect()) as conn:
+            same_site = [r["url_key"] for r in conn.execute("SELECT url_key FROM clinics WHERE city_key = ?", (city_key(city),)).fetchall()
+                         if r["url_key"].split("/")[0].split("?")[0] == site]
+        if same_site and key not in same_site:
+            return False
     with contextlib.closing(connect()) as conn, conn:
         cur = conn.execute(
             "INSERT OR IGNORE INTO clinics (url_key, url, name, city, city_key, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -226,58 +259,12 @@ def set_location(url: str, lat: float | None, lng: float | None) -> None:
         conn.execute("UPDATE clinics SET lat=?, lng=? WHERE url_key=? AND lat IS NULL", (lat, lng, url_key(url)))
 
 
+def get_meta(key: str) -> str | None:
+    with contextlib.closing(connect()) as conn:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
 def set_meta(key: str, value: str) -> None:
     with contextlib.closing(connect()) as conn, conn:
         conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
-
-
-# ---------- seeding ----------
-
-def seed_if_empty(seed_path: Path, cache_path: Path, default_urls: list[str]) -> int:
-    """Fill an empty database from seed_clinics.json, the saved demo scan and the default London clinics.
-    Returns how many clinics were added (0 if the database already had any)."""
-    if count():
-        return 0
-    added = 0
-
-    def load(path: Path) -> list[dict]:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return [c for c in data.get("clinics", []) if isinstance(c, dict) and c.get("url")]
-        except Exception:
-            return []
-
-    def mtime_iso(path: Path) -> str | None:
-        try:
-            return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except OSError:
-            return None
-
-    for path, default_checked in ((seed_path, None), (cache_path, mtime_iso(cache_path))):
-        for c in load(path):
-            if (c.get("raw_notes") or "").startswith(("scan failed", "scan error")):
-                continue
-            city = c.get("city") or "London, ON"
-            if not add_url(c["url"], city, c.get("name"), source="seed"):
-                continue
-            added += 1
-            if c.get("status") in STATUSES:
-                with contextlib.closing(connect()) as conn, conn:
-                    conn.execute(
-                        "UPDATE clinics SET status=?, evidence_quote=?, waitlist_url=?, raw_notes=?, address=?, lat=?, lng=?, "
-                        "checked_via=?, last_checked=? WHERE url_key=?",
-                        (c["status"], c.get("evidence_quote") or "", c.get("waitlist_url"), c.get("raw_notes") or "",
-                         c.get("address"), c.get("lat"), c.get("lng"), c.get("checked_via") or "saved",
-                         c.get("last_checked") or default_checked, url_key(c["url"])),
-                    )
-    for url in default_urls:
-        added += add_url(url, "London, ON", source="seed")
-    return added
-
-
-def export_rows() -> list[dict]:
-    """Every checked clinic, for writing a new seed_clinics.json."""
-    with contextlib.closing(connect()) as conn:
-        rows = [dict(r) for r in conn.execute("SELECT * FROM clinics WHERE status IS NOT NULL ORDER BY city_key, name").fetchall()]
-    keep = ("url", "name", "city", "status", "evidence_quote", "waitlist_url", "raw_notes", "address", "lat", "lng", "checked_via", "last_checked")
-    return [{k: r.get(k) for k in keep} for r in rows]

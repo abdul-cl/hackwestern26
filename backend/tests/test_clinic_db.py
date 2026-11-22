@@ -9,6 +9,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, clinic_db, refresh, scanning, discovery, watchdog, geo, models
 from fastapi.testclient import TestClient
@@ -263,25 +264,6 @@ run(loop_briefly())
 check("refresher loop keeps running after an error", len(runs) >= 3, str(runs))
 refresh.refresh_stale = real_stale
 
-# ---------- seeding ----------
-clinic_db.DB_PATH = tmp / "seed.db"
-seed = tmp / "seed.json"
-seed.write_text(json.dumps({"clinics": [
-    {"url": "https://s1.ca", "name": "S1", "city": "London, ON", "status": "accepting", "evidence_quote": "q", "lat": 43.0, "lng": -81.0, "last_checked": "2026-11-01T00:00:00Z"},
-    {"url": "https://s2.ca", "name": "S2"},
-    {"url": "https://bad.ca", "raw_notes": "scan failed: x", "status": "closed"},
-]}), encoding="utf-8")
-config.CACHE_PATH.write_text(json.dumps({"clinics": [{"name": "C1", "url": "https://c1.ca", "status": "waitlist", "evidence_quote": "w",
-                                                       "waitlist_url": None, "raw_notes": "ok"}]}), encoding="utf-8")
-added = clinic_db.seed_if_empty(seed, config.CACHE_PATH, ["https://www.ldam.ca/find-a-doctor", "https://s1.ca/"])
-check("seed: seed file + cache + defaults, failed entries skipped, no duplicates", added == 4 and clinic_db.count() == 4, str(added))
-check("seed: statuses and times kept", clinic_db.get("https://s1.ca")["status"] == "accepting" and clinic_db.get("https://s1.ca")["last_checked"] == "2026-11-01T00:00:00Z"
-      and clinic_db.get("https://c1.ca")["status"] == "waitlist" and clinic_db.get("https://c1.ca")["last_checked"] and clinic_db.get("https://s2.ca")["status"] is None)
-check("seed: no-op when the database has clinics", clinic_db.seed_if_empty(seed, config.CACHE_PATH, []) == 0)
-check("export_rows: checked clinics only", {r["url"] for r in clinic_db.export_rows()} == {"https://s1.ca", "https://c1.ca"})
-seed.write_text("{broken", encoding="utf-8")
-clinic_db.DB_PATH = tmp / "seed2.db"
-check("seed: broken seed file doesn't crash", clinic_db.seed_if_empty(seed, tmp / "missing.json", []) == 0)
 
 # ---------- endpoints ----------
 clinic_db.DB_PATH = tmp / "api.db"

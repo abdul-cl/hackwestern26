@@ -1,13 +1,20 @@
-import { forwardRef, useState } from "react";
-import { BellPlus, Check, Clock, ExternalLink, FileSignature, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
+import { forwardRef, useEffect, useState } from "react";
+import { BellPlus, Check, Clock, ExternalLink, FileSignature, Hourglass, Loader2, MapPin, Phone, Quote, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../api";
-import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel } from "../lib/clinics";
+import { checkedLabel, displayStatus, isFailedScan, lastSeenLabel, quoteLink } from "../lib/clinics";
 import { useAppState } from "../state/AppState";
 import StatusBadge from "./StatusBadge";
 import CallScript from "./CallScript";
 import VerifyDoctor from "./VerifyDoctor";
 
+/** Match score ring. It fills from empty when the score arrives, and glides when the score changes. */
 function ScoreRing({ score }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (score == null) return;
+    const id = requestAnimationFrame(() => setShown(score));
+    return () => cancelAnimationFrame(id);
+  }, [score]);
   if (score == null) return null;
   const color = score >= 70 ? "text-emerald-600" : score >= 40 ? "text-amber-500" : "text-rose-500";
   const r = 18;
@@ -17,15 +24,15 @@ function ScoreRing({ score }) {
       <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90">
         <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-100" />
         <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} className={color} />
+          strokeDasharray={c} strokeDashoffset={c * (1 - shown / 100)} className={`${color} transition-[stroke-dashoffset] duration-1000 ease-flow`} />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-slate-800">{score}</span>
+      <span key={score} className="absolute inset-0 flex animate-pop-in items-center justify-center text-sm font-semibold text-slate-800">{score}</span>
     </div>
   );
 }
 
 /** One clinic: scan + ranking data, and its actions (apply / call / verify doctor / watch). */
-const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, onApply, email, city, onWatched }, ref) {
+const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, onApply, email, city, onWatched, enterDelay = 0 }, ref) {
   const [panel, setPanel] = useState(null); // "call" | "verify" | null
   const [watchEmail, setWatchEmail] = useState("");
   const [watchState, setWatchState] = useState({ loading: false, done: false, error: null, askEmail: false });
@@ -73,7 +80,8 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
     <article
       ref={ref}
       onClick={() => onSelect(clinic.url)}
-      className={`card scroll-mt-24 p-4 transition ${selected ? "ring-2 ring-emerald-500" : "hover:border-slate-300"}`}
+      style={{ animationDelay: `${enterDelay}ms` }}
+      className={`card animate-card-in scroll-mt-24 p-4 transition-[border-color,box-shadow] duration-300 ${selected ? "ring-2 ring-emerald-500" : "hover:border-slate-300"}`}
     >
       <div className="flex items-start gap-3">
         <ScoreRing score={clinic.score} />
@@ -108,13 +116,27 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
               {clinic.requirements.map((r) => <li key={r}>{r}</li>)}
             </ul>
           )}
+          {/* opening hours and wait / busy times, only when the clinic's own site states them */}
+          {(clinic.hours || clinic.wait_note) && (
+            <div className="flex flex-col gap-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-4">
+              {clinic.hours && <span className="flex items-start gap-1.5"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span><b className="font-medium text-slate-700">Hours:</b> {clinic.hours}</span></span>}
+              {clinic.wait_note && <span className="flex items-start gap-1.5"><Hourglass className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span><b className="font-medium text-slate-700">Wait times:</b> {clinic.wait_note}</span></span>}
+            </div>
+          )}
           {clinic.evidence_quote && (
             <blockquote className="flex gap-2 rounded-lg bg-slate-50 p-2 text-xs italic text-slate-600">
               <Quote className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span>{clinic.evidence_quote}</span>
+              <span className="min-w-0">
+                {clinic.evidence_quote}{" "}
+                {/* opens the clinic's own page with this sentence highlighted, so anyone can check it */}
+                <a href={quoteLink(clinic.url, clinic.evidence_quote)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                   className="whitespace-nowrap font-medium not-italic text-pine-700 underline-offset-2 hover:underline">
+                  See it on their site <ExternalLink className="inline h-3 w-3" />
+                </a>
+              </span>
             </blockquote>
           )}
-          {!clinic.ranked && <p className="text-xs text-slate-400">Ranking pending...</p>}
+          {!clinic.ranked && (mission.state.running || mission.state.rankRetrying) && <p className="text-xs text-slate-400">Ranking...</p>}
         </div>
       )}
 
@@ -124,18 +146,25 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       {(checked || recheck.note || recheck.error) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {checked && <span className="flex items-center gap-1 text-slate-400"><Clock className="h-3.5 w-3.5" />{checked}</span>}
-          {recheck.note && <span className="text-pine-700">{recheck.note}</span>}
-          {recheck.error && <span className="text-rose-700">{recheck.error}</span>}
+          {recheck.note && <span className="animate-row-in text-pine-700">{recheck.note}</span>}
+          {recheck.error && <span className="animate-row-in text-rose-700">{recheck.error}</span>}
         </div>
       )}
 
+      {!failed && clinic.ranked && !clinic.waitlist_url && !clinic.phone_number && (
+        <p className="mt-3 text-xs text-slate-500">
+          Their website doesn't list an online form or a phone number for new patients.{" "}
+          <a href={clinic.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium text-pine-700 hover:underline">Visit their site</a> to see how to join.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
         {clinic.waitlist_url ? (
           <button onClick={() => onApply(clinic)} className="btn-primary py-1.5">
             <FileSignature className="h-4 w-4" /> Auto-Fill Waitlist
           </button>
         ) : (
-          !failed && (
+          // phone-only clinics: the script needs a number to call (the backend drops numbers it can't find on the site)
+          !failed && clinic.phone_number && (
             <button onClick={() => toggle("call")} className={`btn-secondary py-1.5 ${panel === "call" ? "bg-slate-100" : ""}`}>
               <Phone className="h-4 w-4" /> {panel === "call" ? "Hide Call Script" : "View Call Script"}
             </button>
@@ -151,7 +180,7 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
         )}
         {status === "closed" && (
           watchState.done ? (
-            <span className="btn py-1.5 text-emerald-700"><Check className="h-4 w-4" /> Watching</span>
+            <span className="btn animate-pop-in py-1.5 text-emerald-700"><Check className="h-4 w-4" /> Watching</span>
           ) : (
             <button onClick={watch} disabled={watchState.loading} className="btn-secondary py-1.5">
               {watchState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellPlus className="h-4 w-4" />} Watch Clinic
@@ -161,7 +190,7 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       </div>
 
       {watchState.askEmail && !email && (
-        <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-2 flex animate-slide-down gap-2" onClick={(e) => e.stopPropagation()}>
           <input
             type="email"
             className="input py-1.5"
@@ -176,8 +205,9 @@ const ClinicCard = forwardRef(function ClinicCard({ clinic, selected, onSelect, 
       {watchState.error && <p className="mt-1 text-xs text-rose-700">{watchState.error}</p>}
 
       <div onClick={(e) => e.stopPropagation()}>
-        {panel === "call" && <CallScript clinic={clinic} />}
-        {panel === "verify" && <VerifyDoctor city={city} />}
+        {/* panels grow open from zero height (.expand in index.css) */}
+        {panel === "call" && <div className="expand"><div><CallScript clinic={clinic} /></div></div>}
+        {panel === "verify" && <div className="expand"><div><VerifyDoctor city={city} /></div></div>}
       </div>
     </article>
   );

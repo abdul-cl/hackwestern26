@@ -6,6 +6,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.geo as geo
@@ -165,7 +166,7 @@ async def run_geo():
     b2 = await geo.geocode_address("another new street")  # breaker open -> no request
     return r1, r2, q, gets_before, b1, b2, time.time() - t
 r1, r2, q, gets_before, b1, b2, dt = asyncio.run(run_geo())
-check("geo: result parsed", r1 == {"lat": 43.0, "lng": -81.2, "display_name": "ON"}, str(r1))
+check("geo: result parsed (city is null when the answer has none)", r1 == {"lat": 43.0, "lng": -81.2, "display_name": "ON", "city": None}, str(r1))
 check("geo: cache hit (1 request for 2 calls)", r2 == r1 and gets_before == 2, str(n))
 check("geo: non-Ontario rejected", q is None)
 check("geo: error retried once -> None, breaker skips next lookup", b1 is None and b2 is None and n["get"] == gets_before + 2, str(n))

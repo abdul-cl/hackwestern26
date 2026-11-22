@@ -10,6 +10,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, common, models, geo, watchdog, scanning, discovery, ranking, clinic_db, refresh
 from fastapi.testclient import TestClient
@@ -165,12 +166,53 @@ code, j = mission(city=T)
 check("live mode without key -> JSON 500 before stream", code == 500 and "TINYFISH_API_KEY" in j["detail"], str(j))
 os.environ["TINYFISH_API_KEY"] = "fake"
 
-# --- 9. demo mode with nothing saved for the city -> the demo cache file
+# --- 9. demo mode with nothing saved for the city: never another city's results; search it live instead
 cached = [fake_scan_one(u) for u in ["https://open.ca", "https://full1.ca"]]
-config.CACHE_PATH.write_text(json.dumps({"clinics": cached}), encoding="utf-8")
+config.CACHE_PATH.write_text(json.dumps({"clinics": cached}), encoding="utf-8")  # the saved backup is London's
+discover_calls.clear()
+STATUS.update({"https://empty-open.ca": "accepting", "https://empty-full.ca": "closed"})  # Emptytown's own clinics
+def emptytown_discover(req):
+    discover_calls.append(req)
+    return {"city": req.city, "clinic_urls": ["https://empty-open.ca", "https://empty-full.ca"]}
+discovery.discover = emptytown_discover
 code, ev = mission(city="Emptytown, ON", use_cache=True)
-check("demo mode, empty city -> demo cache", code == 200 and kinds(ev).count("clinic_scanned") == 2
+check("demo mode, city with nothing saved -> searched live (TinyFish web search), not London's backup",
+      code == 200 and len(discover_calls) == 1 and discover_calls[0].city == "Emptytown, ON"
+      and any("hasn't searched Emptytown" in e.get("message", "") for e in ev)
+      and not any("Demo mode" in e.get("message", "") for e in ev), str(ev)[:400])
+check("new city: its clinics are checked live and saved under that city",
+      kinds(ev).count("clinic_scanned") >= 1 and clinic_db.nearby("Emptytown, ON", None, 10), str(ev)[-300:])
+code, ev = mission(city="Emptytown, ON", use_cache=True)
+check("new city, second search: straight from the database", any("Using saved results" in e.get("message", "") for e in ev)
+      and not any("hasn't searched" in e.get("message", "") for e in ev), str(ev)[:300])
+# every search adds what the database doesn't have yet (saved-results mode too), at most once per city per cooldown
+discover_calls.clear()
+code, ev = mission(city="Emptytown, ON", use_cache=True)
+check("saved city, web search ran recently: no new web search (cooldown)", discover_calls == [] and code == 200, str(discover_calls))
+STATUS["https://empty-new.ca"] = "waitlist"
+def more_emptytown(req):
+    discover_calls.append(req)
+    return {"city": req.city, "clinic_urls": ["https://empty-open.ca", "https://empty-full.ca", "https://empty-new.ca"]}
+discovery.discover = more_emptytown
+config.WEB_SEARCH_COOLDOWN_H = 0
+code, ev = mission(city="Emptytown, ON", use_cache=True, max_clinics=5)
+scanned = {e["clinic"]["url"]: e["clinic"] for e in ev if e["type"] == "clinic_scanned"}
+check("saved city with fewer clinics than asked: TinyFish searches for more", len(discover_calls) == 1
+      and any("TinyFish is searching the web for more" in e.get("message", "") for e in ev), str(ev)[:300])
+check("only the new clinic is checked live; saved ones come from the database", "https://empty-new.ca" in scanned
+      and agent_calls.count("https://empty-new.ca") == 1 and scanned["https://empty-new.ca"]["status"] == "waitlist"
+      and any("checking 1 new clinic websites live" in e.get("message", "") for e in ev), str(ev)[:400])
+check("and it's saved for next time", (clinic_db.get("https://empty-new.ca") or {}).get("status") == "waitlist")
+config.WEB_SEARCH_COOLDOWN_H = 6
+discovery.discover = emptytown_discover
+
+for row in clinic_db.nearby("London, ON", None, 100):  # London with nothing saved -> its own backup still works
+    with __import__("contextlib").closing(clinic_db.connect()) as conn, conn:
+        conn.execute("UPDATE clinics SET city_key = 'elsewhere' WHERE url_key = ?", (row["url_key"],))
+code, ev = mission(city="London, ON", use_cache=True)
+check("London with nothing saved -> the saved London backup", code == 200 and kinds(ev).count("clinic_scanned") == 2
       and any("Demo mode" in e.get("message", "") for e in ev), str(ev)[:300])
+discovery.discover = fake_discover
 
 # --- 10. failures never stop the mission
 def broken_discover(req): raise RuntimeError("search down")

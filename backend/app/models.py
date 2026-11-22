@@ -1,4 +1,6 @@
 """Request / response models for every endpoint. Size caps keep one bad request from burning credits."""
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 class ScanRequest(BaseModel):
@@ -26,7 +28,7 @@ class PatientInfo(BaseModel):
     email: str = Field(max_length=200)
     phone: str = Field(max_length=40)
     postal_code: str = Field(max_length=12)
-    visit_reason: str | None = Field(None, max_length=500)  # optional: symptoms / why they want a family doctor
+    reason: str = Field(default="", max_length=600)  # optional reason for the visit, typed only into a matching field
 
 
 class ApplyRequest(BaseModel):
@@ -45,7 +47,8 @@ class RankedClinic(BaseModel):
     phone_number: str | None = None
     call_hours: str | None = None
     call_script: str | None = None
-    posted_wait: str | None = None  # a wait time the clinic itself posts (e.g. "about 6 months"), never estimated
+    hours: str | None = None  # the clinic's opening hours, from its own site (null if it doesn't say)
+    wait_note: str | None = None  # wait times / busiest times the clinic itself states (never estimated)
 
 
 class RankResponse(BaseModel):
@@ -80,6 +83,7 @@ class MissionRequest(BaseModel):
     clinic_urls: list[str] = Field([], max_length=50)  # optional: skip discovery and scan these
     max_clinics: int = 5  # how many clinics this search includes (clamped 1-25)
     refresh: str = Field("auto", max_length=10)  # auto: re-check out-of-date clinics | all: re-check every clinic | none: saved only
+    watch_agents: bool = False  # watch mode: every clinic in this search is read by a TinyFish browser agent, streamed live
 
 
 class SimulateRequest(BaseModel):
@@ -106,3 +110,11 @@ class RefreshRequest(BaseModel):
 class SeedRequest(BaseModel):
     city: str = Field("London, ON", max_length=100)
     max_new: int = 10  # clamped 1-20
+
+
+class FeedbackRequest(BaseModel):
+    """Anonymous survey answer (feedback.py). helped: did CareScout help today; ease: 1-5; comment optional."""
+    helped: Literal["yes", "somewhat", "no"]
+    ease: int | None = Field(default=None, ge=1, le=5)
+    comment: str = Field(default="", max_length=1000)
+    page: str = Field(default="", max_length=40)

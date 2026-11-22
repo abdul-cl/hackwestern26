@@ -3,7 +3,7 @@ import Logo from "./Logo";
 
 export default function SiteFooter() {
   return (
-    <footer className="mt-24 border-t border-slate-200 bg-white">
+    <footer className="mt-24 border-t border-slate-200 bg-surface">
       <div className="container-page grid gap-8 py-10 text-sm md:grid-cols-[1.4fr,1fr,1fr]">
         <div className="max-w-sm">
           <div className="flex items-center gap-2">

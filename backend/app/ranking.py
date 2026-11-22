@@ -1,5 +1,6 @@
 """Gemini Triage: rank, translate and add call scripts / badges: POST /api/rank."""
 import json
+import re
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,6 +13,8 @@ router = APIRouter()
 def rank(req: models.RankRequest):
     if not req.clinics:
         return {"ranked_clinics": []}
+    # what the patient says on the phone: French if they chose French, else English (what clinic staff speak)
+    spoken = "French" if req.language.strip().lower() in ("french", "français", "francais") else "English"
     prompt = (
         "You rank Ontario family-doctor clinics for a patient.\n"
         f"Patient preferences: {json.dumps(req.preferences)}\n"
@@ -29,16 +32,20 @@ def rank(req: models.RankRequest):
         "[\"UHIP Friendly\"], or [\"Check Eligibility\"] when the notes do not say). "
         "phone_number (the clinic's phone number copied from raw_notes or evidence_quote, else null), "
         "call_hours (when to call, e.g. \"Mon-Fri, 8am-4pm\", from the notes, else null), "
-        "posted_wait (a wait time the clinic itself states in its notes, e.g. \"Waitlist is about 6 months\" or "
-        "\"Walk-in wait around 45 min\", copied in English, else null; never estimate or guess a wait), "
-        "call_script (ONLY when the clinic's waitlist_url is null, else null: a natural 2-3 sentence phone script "
-        f"in {req.language} the patient can read word for word to ask about joining as a new patient, "
-        f"then a blank line, then a heading meaning 'Have ready:' written in {req.language} "
+        "hours (the clinic's opening hours if the notes state them, short, e.g. \"Mon-Fri 9am-5pm, Sat 10am-2pm\", else null), "
+        "wait_note (only if the notes state wait times or busiest / quietest times, a short line in plain words, e.g. "
+        "\"Walk-in waits are longest Monday mornings\"; else null. Never estimate or invent a wait time), "
+        "call_script (ONLY when the clinic's waitlist_url is null, else null). The receptionist at an Ontario clinic "
+        f"speaks {spoken}, so the patient must SAY the lines in {spoken}: write a natural 2-3 sentence phone script in "
+        f"{spoken} the patient can read word for word to ask about joining as a new patient, one sentence per line"
+        + (f", and right under each sentence a line '(meaning: ...)' with that sentence translated into {req.language} "
+           "so the patient understands what they are saying (always on its own line, never in brackets after the sentence)" if req.language != spoken else "")
+        + f"; then a blank line, then a heading meaning 'Have ready:' written in {req.language} "
         "(do not leave it in English unless the language is English), then a short "
-        "checklist with one item per line, each starting with '- ', of what to have in hand before dialing "
+        f"checklist in {req.language} with one item per line, each starting with '- ', of what to have in hand before dialing "
         f"(such as their {req.coverage_type} card, postal code, date of birth, current medications). "
-        "Separate the script, heading and checklist lines with real line breaks. "
-        f"Write reason, requirements, next_step and call_script naturally in {req.language}. "
+        "Separate the lines with real line breaks. "
+        f"Write reason, requirements, next_step, hours and wait_note naturally in {req.language}. "
         "Keep clinic names, URLs, phone numbers and coverage_tags in English. "
         "Never invent a phone number or hours; use null if the data does not contain them. Use only the given data. "
         "If a clinic has distance_km, that is the straight-line distance from the PATIENT'S HOME (their postal code), "
@@ -65,7 +72,27 @@ def rank(req: models.RankRequest):
     input_urls = {str(c.get("url")) for c in req.clinics if c.get("url")}
     by_name = {str(c.get("name")): c.get("url") for c in req.clinics if c.get("name")}
     by_lower = {k.strip().lower(): v for k, v in by_name.items()}
+    by_url = {str(c.get("url")): c for c in req.clinics if c.get("url")}
     for c in clinics:
         c["score"] = max(0, min(100, c["score"]))
         c["url"] = by_name.get(c["name"]) or by_lower.get(c["name"].strip().lower()) or (c["url"] if c["url"] in input_urls else None)
+        enforce_contact_rules(c, by_url.get(c["url"]) if c["url"] else None)
     return {"ranked_clinics": sorted(clinics, key=lambda c: -c["score"])}
+
+
+def _digits(text) -> str:
+    return re.sub(r"\D", "", str(text or ""))
+
+
+def enforce_contact_rules(ranked: dict, source: dict | None) -> None:
+    """Check the model's contact details against the clinic's own data (don't just trust the prompt):
+    - a phone number is kept only if its digits appear in what we read from the clinic's site;
+    - a call script only for clinics without an online waitlist that DO list a phone number (a script with no
+      number to call, or for a clinic you can apply to online, is just confusing)."""
+    source = source or {}
+    seen = _digits(" ".join(str(source.get(k) or "") for k in ("raw_notes", "evidence_quote", "address")))
+    phone = _digits(ranked.get("phone_number"))
+    if len(phone) < 7 or phone[-7:] not in seen:
+        ranked["phone_number"] = None
+    if source.get("waitlist_url") or not ranked["phone_number"]:
+        ranked["call_script"] = None

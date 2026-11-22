@@ -30,22 +30,12 @@ API_KEY = os.getenv("CARESCOUT_API_KEY", "").strip()  # if set, every /api/* cal
 # e.g. deployed frontend URL. Forgiving about quotes, spaces and a trailing "/" (the browser sends the origin without one).
 EXTRA_ORIGINS = [o for o in (p.strip().strip("\"'").strip().rstrip("/") for p in os.getenv("ALLOWED_ORIGINS", "").split(",")) if o]
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "").strip().lower() in ("1", "true", "yes")
-ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://carescout-.*\.vercel\.app (preview deploys)
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()  # e.g. https://([a-z0-9-]+-)?carescout\.you\.workers\.dev (preview builds)
 
 # Public deployment: visitors only get saved (cached) results, so strangers can't spend TinyFish/Gemini credits.
 PUBLIC_DEMO = os.getenv("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")
 ADMIN_KEY = os.getenv("CARESCOUT_ADMIN_KEY", "").strip()  # server-side secret: header X-Admin-Key unlocks live agents
 PUBLIC_RATE_LIMIT = int(os.getenv("PUBLIC_RATE_LIMIT", "30"))  # requests per visitor per 10 minutes (public mode)
-
-# Real opening alerts by email (optional). Without RESEND_API_KEY, alerts only show in the app.
-# Free tier note: until you verify a domain at resend.com, Resend only delivers to the email your account was made with.
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
-ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "CareScout <onboarding@resend.dev>").strip()
-EMAIL_DEMO_ALERTS = os.getenv("EMAIL_DEMO_ALERTS", "").strip().lower() in ("1", "true", "yes")  # also email simulated openings
-
-
-def email_alerts_enabled() -> bool:
-    return bool(RESEND_API_KEY) and not RESEND_API_KEY.startswith("your_")
 
 
 def is_admin(request) -> bool:
@@ -55,11 +45,44 @@ def is_admin(request) -> bool:
     return bool(ADMIN_KEY) and bool(key) and secrets.compare_digest(key, ADMIN_KEY)
 
 
+# Auto-Fill on the public demo (it starts a paid browser agent, so it's guarded): only for clinic forms CareScout found,
+# at most PUBLIC_APPLY_PER_HOUR per visitor and PUBLIC_APPLY_PER_DAY for the whole site. PUBLIC_APPLY=0 turns it off.
+PUBLIC_APPLY = os.getenv("PUBLIC_APPLY", "1").strip().lower() not in ("0", "false", "no")
+PUBLIC_APPLY_PER_HOUR = max(0, int(os.getenv("PUBLIC_APPLY_PER_HOUR", "3")))
+PUBLIC_APPLY_PER_DAY = max(0, int(os.getenv("PUBLIC_APPLY_PER_DAY", "40")))
+
+# First search of a city with nothing saved yet, on the public demo: CareScout searches the web live (TinyFish search,
+# quick page reads, TinyFish browser agents when a site needs one) and saves the results for everyone after. Limited to
+# PUBLIC_NEW_CITY_MAX clinics per search and PUBLIC_NEW_CITIES_PER_DAY such searches a day (429 after that).
+PUBLIC_NEW_CITY_MAX = max(1, int(os.getenv("PUBLIC_NEW_CITY_MAX", "8")))
+# Watch mode ("Watch TinyFish check each clinic"): every clinic is read by a browser agent, live. On the public demo each
+# such search covers at most PUBLIC_WATCH_MAX clinics, and the site allows PUBLIC_WATCH_PER_DAY of them a day.
+PUBLIC_WATCH_MAX = max(1, int(os.getenv("PUBLIC_WATCH_MAX", "4")))
+PUBLIC_WATCH_PER_DAY = max(0, int(os.getenv("PUBLIC_WATCH_PER_DAY", "10")))
+# A search that finds fewer saved clinics than asked for has TinyFish look for more. In saved-results mode (demo, public
+# demo) that web search runs at most once per city per WEB_SEARCH_COOLDOWN_H hours, so a small city isn't searched again
+# on every visit.
+WEB_SEARCH_COOLDOWN_H = float(os.getenv("WEB_SEARCH_COOLDOWN_H", "6"))
+PUBLIC_NEW_CITIES_PER_DAY = max(0, int(os.getenv("PUBLIC_NEW_CITIES_PER_DAY", "20")))
+
+# The shared demo watchlist. On the public demo, watchlists only work for this address, so visitors can try the
+# Watchdog flow without storing their own email, and nobody can add, delete or fake alerts for real people's watches.
+DEMO_EMAIL = "demo@carescout.ca"
+# Email opening alerts (notify.py, https://resend.com). Off unless RESEND_API_KEY is set. The sender address must be
+# on a domain verified in Resend; Resend's test sender (onboarding@resend.dev) only delivers to your own Resend email.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+ALERT_FROM_EMAIL = os.getenv("ALERT_FROM_EMAIL", "CareScout <onboarding@resend.dev>").strip()
+SITE_URL = os.getenv("SITE_URL", "").strip()  # the website's address, for the "stop watching" link in emails
+# How many proxies sit in front of the app and append to X-Forwarded-For (Railway/Render: 1). The client's real IP is
+# that many entries from the end; anything before it was written by the client and can't be trusted.
+TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "1")))
+
+
 def public_restricted(request) -> bool:
     """True when this request must stay in demo mode (public deployment and no admin key)."""
     return PUBLIC_DEMO and not is_admin(request)
 DEFAULT_CLINIC_URLS = [
-    "https://www.ldam.ca/find-a-doctor",
+    "https://hamiltonmedclinic.com",
     "https://thamesvalleyfht.ca/become-a-patient/",
     "https://londonfht.ca/looking-for-a-primary-care-provider-apply-here-now/",
     "https://icaremedicallondon.ca/",
@@ -92,8 +115,12 @@ STATUSES = ("accepting", "waitlist", "closed")
 # ---------- Clinic database (see clinic_db.py / refresh.py) ----------
 # Where clinics.db lives. On Railway/Render point this at a persistent volume (e.g. /data) so it survives redeploys.
 DATA_DIR = Path(os.getenv("DATA_DIR") or BACKEND_DIR)
-SEED_PATH = BACKEND_DIR / "seed_clinics.json"  # clinics loaded into an empty database on startup
-SEED_ON_START = os.getenv("CARESCOUT_SEED", "1").strip().lower() not in ("0", "false", "no")
+# A recording of one real live search (backend/record_demo.py). Demo / public-demo searches replay its Scout and
+# Browser Swarm steps at REPLAY_SPEED x (no gap longer than REPLAY_MAX_GAP_S), then rank and watch live as usual.
+DEMO_REPLAY_PATH = BACKEND_DIR / "demo_mission.json"
+DEMO_REPLAY = os.getenv("DEMO_REPLAY", "1").strip().lower() not in ("0", "false", "no")
+REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "8"))
+REPLAY_MAX_GAP_S = float(os.getenv("REPLAY_MAX_GAP_S", "1.5"))
 FRESH_HOURS = float(os.getenv("FRESH_HOURS", "12"))  # a clinic checked within this many hours isn't re-checked in "auto" mode
 # Availability older than this is "expired": shown as "Needs a re-check" (with the last-seen status), never as current.
 MAX_STATUS_AGE_DAYS = float(os.getenv("MAX_STATUS_AGE_DAYS", "7"))

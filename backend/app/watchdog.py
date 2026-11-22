@@ -36,9 +36,6 @@ def connect() -> sqlite3.Connection:
         "id INTEGER PRIMARY KEY AUTOINCREMENT, watch_id INTEGER, clinic_name TEXT, url TEXT, user_email TEXT, "
         "old_status TEXT, new_status TEXT, evidence_quote TEXT, message TEXT, simulated INTEGER DEFAULT 0, created_at TEXT)"
     )
-    # each phone asks for its own alerts every minute, so look them up by email without scanning the table
-    conn.execute("CREATE INDEX IF NOT EXISTS alerts_by_email ON alerts(user_email, id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS watches_by_email ON watches(user_email)")
     conn.commit()
     return conn
 
@@ -80,13 +77,18 @@ def watches_for_url(url: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_watch(watch_id: int | None) -> dict | None:
-    """One watch by id, or the most recently created one when watch_id is None."""
+def get_watch(watch_id: int | None, user_email: str | None = None) -> dict | None:
+    """One watch by id, or the most recently created one when watch_id is None. With user_email: only that user's."""
+    where, args = [], []
+    if watch_id is not None:
+        where.append("id = ?")
+        args.append(watch_id)
+    if user_email is not None:
+        where.append("lower(user_email) = ?")
+        args.append(user_email.strip().lower())
+    sql = "SELECT * FROM watches" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created_at DESC, id DESC LIMIT 1"
     with contextlib.closing(connect()) as conn:
-        if watch_id is None:
-            row = conn.execute("SELECT * FROM watches ORDER BY created_at DESC, id DESC LIMIT 1").fetchone()
-        else:
-            row = conn.execute("SELECT * FROM watches WHERE id = ?", (watch_id,)).fetchone()
+        row = conn.execute(sql, args).fetchone()
     return dict(row) if row else None
 
 
@@ -110,17 +112,19 @@ def save_alerts(alerts: list[dict], raw_emails: dict[int, str], simulated: bool 
                 (a["id"], a["clinic_name"], a["url"], raw_emails.get(a["id"], a["user_email"]), a["old_status"],
                  a["new_status"], a.get("evidence_quote", ""), a["message"], int(simulated), stamp),
             )
-    # real email for openings (does nothing without RESEND_API_KEY; simulated ones only with EMAIL_DEMO_ALERTS=1)
-    from . import email_alerts
-    email_alerts.send_opening_alerts(alerts, raw_emails, simulated)
+    if not simulated:  # real status changes only: email the person watching (no-op unless RESEND_API_KEY is set)
+        from . import notify
+        for a in alerts:
+            notify.send_alert(a, raw_emails.get(a["id"], a["user_email"]))
 
 
 def list_alerts(user_email: str | None = None, limit: int = 20) -> list[dict]:
-    """Newest first. Each item: the alert shape plus alert_id, created_at and simulated (watch id stays in 'id')."""
-    sql = "SELECT * FROM alerts {} ORDER BY id DESC LIMIT ?"
+    """Newest first. Each item: the alert shape plus alert_id, created_at and simulated (watch id stays in 'id').
+    Real alerts only: previews (simulate-opening) were never news, so older stored ones are left out."""
+    sql = "SELECT * FROM alerts WHERE simulated = 0 {} ORDER BY id DESC LIMIT ?"
     with contextlib.closing(connect()) as conn:
         if user_email:
-            rows = conn.execute(sql.format("WHERE user_email = ?"), (user_email.strip(), limit)).fetchall()
+            rows = conn.execute(sql.format("AND user_email = ?"), (user_email.strip(), limit)).fetchall()
         else:
             rows = conn.execute(sql.format(""), (limit,)).fetchall()
     out = []

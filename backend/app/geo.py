@@ -68,7 +68,10 @@ async def _search(params: dict, cache_key: str) -> dict | None:
             hit = hits[0]
             # Only accept places in Ontario, so a same-named place elsewhere never lands on the map.
             if (hit.get("address") or {}).get("state") == "Ontario":
-                result = {"lat": float(hit["lat"]), "lng": float(hit["lon"]), "display_name": hit.get("display_name", "")}
+                address = hit.get("address") or {}
+                place = next((address.get(k) for k in ("city", "town", "village", "municipality", "hamlet") if address.get(k)), None)
+                result = {"lat": float(hit["lat"]), "lng": float(hit["lon"]), "display_name": hit.get("display_name", ""),
+                          "city": f"{place}, ON" if place else None}
         _cache[cache_key] = result  # cache real answers (incl. "not found"), never errors/timeouts
         return result
     except Exception as e:
@@ -83,6 +86,12 @@ async def geocode_address(query: str) -> dict | None:
     if not query:
         return None
     return await _search({"q": query}, "q:" + query.lower())
+
+
+async def city_for_postal_code(code: str | None) -> str | None:
+    """'M5V 3L9' -> 'Toronto, ON' (None if the code isn't a full Ontario postal code or the lookup fails)."""
+    place = await geocode_postal_code(code)
+    return (place or {}).get("city")
 
 
 async def geocode_postal_code(code: str | None) -> dict | None:

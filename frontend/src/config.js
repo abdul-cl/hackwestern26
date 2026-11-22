@@ -20,11 +20,22 @@ export const DEFAULT_SEARCH = {
   useCache: false,
   maxClinics: 5, // how many clinics one search includes (1-25)
   recheckAll: false, // true: re-check every clinic live, even ones checked recently
+  watchAgents: false, // true: a TinyFish browser agent reads every clinic, live on screen (watch mode)
 };
 
 export const MAX_CLINICS = 25;
 
+// The shared demo watchlist (same as the backend's DEMO_EMAIL). Demo searches auto-watch full clinics with it, so the
+// Watchdog / opening-alert part of the demo always has something to show; on the public demo it's the only one allowed.
+export const DEMO_EMAIL = "demo@carescout.ca";
+
 export const COVERAGE_OPTIONS = ["OHIP", "UHIP", "Uninsured"];
+// What each coverage value means, in plain words (the value itself is what the backend uses).
+export const COVERAGE_LABELS = {
+  OHIP: { short: "OHIP", long: "OHIP (Ontario health card)" },
+  UHIP: { short: "UHIP", long: "UHIP (international students)" },
+  Uninsured: { short: "no coverage", long: "No coverage / uninsured" },
+};
 export const LANGUAGE_OPTIONS = ["English", "French", "Arabic", "Mandarin", "Punjabi"];
 
 // Default map view (downtown London, ON) until clinics with coordinates arrive.

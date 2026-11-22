@@ -1,5 +1,5 @@
 # Render Blueprint for the CareScout backend (Render dashboard -> New -> Blueprint -> pick this repo).
-# The website goes on Vercel (see DEPLOY.md). Secrets marked sync: false are typed in Render's dashboard.
+# The website goes on Cloudflare (see DEPLOY.md). Secrets marked sync: false are typed in Render's dashboard.
 services:
   - type: web
     name: carescout-api
@@ -14,7 +14,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        sync: false # e.g. https://carescout.vercel.app,https://your-domain.com
+        sync: false # e.g. https://carescout.you.workers.dev,https://your-domain.com
       - key: PUBLIC_DEMO
         value: "1"
       - key: CARESCOUT_ADMIN_KEY

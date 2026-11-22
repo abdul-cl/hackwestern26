@@ -1,6 +1,7 @@
 """CareScout API: app setup (auth, CORS, errors, lifespan). Each feature lives in its own module."""
 import asyncio
 import contextlib
+from pathlib import Path
 import os
 import secrets
 
@@ -11,7 +12,7 @@ from fastapi.responses import JSONResponse
 import time
 from collections import deque
 
-from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh
+from . import config, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api, clinics_api, clinic_db, refresh, feedback
 
 print("[startup] TINYFISH_API_KEY:", "set" if os.getenv("TINYFISH_API_KEY") else "MISSING")
 print("[startup] GEMINI_API_KEY:", "set" if os.getenv("GEMINI_API_KEY") else "MISSING")
@@ -64,23 +65,63 @@ def check_api_key(request: Request, x_api_key: str | None = Header(default=None)
 # ---------- Public demo mode (PUBLIC_DEMO=1): protect API credits on a public deployment ----------
 
 # Endpoints that always start a paid TinyFish agent: off for public visitors.
-LIVE_ONLY_PATHS = ("/api/apply", "/api/verify-doctor", "/api/discover", "/api/watch/check", "/api/clinics/refresh", "/api/clinics/seed")
+LIVE_ONLY_PATHS = ("/api/apply", "/api/apply/stream", "/api/verify-doctor", "/api/discover", "/api/watch/check", "/api/clinics/refresh", "/api/clinics/seed")
 # Endpoints that may call Gemini or write data: allowed, but rate-limited per visitor.
-RATE_LIMITED_PATHS = ("/api/rank", "/api/mission/stream", "/api/scan", "/api/scan/stream", "/api/watch", "/api/watch/simulate-opening")
+RATE_LIMITED_PATHS = ("/api/rank", "/api/mission/stream", "/api/scan", "/api/scan/stream", "/api/watch", "/api/watch/simulate-opening", "/api/feedback")
 RATE_WINDOW_S = 600
 _hits: dict[str, deque] = {}
 
 
 def client_ip(request: Request) -> str:
-    """The visitor's IP (hosts like Railway/Render put it first in X-Forwarded-For)."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    """The visitor's IP for rate limiting. Railway/Render append the address they saw to X-Forwarded-For, so the
+    trusted entry is TRUSTED_PROXY_HOPS from the end. The first entry is whatever the client sent (easy to fake)."""
+    hops = config.TRUSTED_PROXY_HOPS
+    parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if hops and len(parts) >= hops:
+        return parts[-hops]
+    return request.client.host if request.client else "unknown"
+
+
+def _trim_hits(now: float) -> None:
+    """Keep the rate-limit table small without resetting everyone: drop idle visitors, then the oldest."""
+    for ip in [ip for ip, q in _hits.items() if not q or now - q[-1] > RATE_WINDOW_S]:
+        del _hits[ip]
+    if len(_hits) > 10_000:
+        for ip in sorted(_hits, key=lambda k: _hits[k][-1])[: len(_hits) - 5_000]:
+            del _hits[ip]
+
+
+APPLY_PATHS = ("/api/apply", "/api/apply/stream")
+_apply_hits: dict[str, deque] = {}
+_apply_day: deque = deque()
+
+
+def apply_quota(request: Request) -> None:
+    """Public Auto-Fill: PUBLIC_APPLY_PER_HOUR per visitor, PUBLIC_APPLY_PER_DAY for the whole site (429 when used up)."""
+    now = time.monotonic()
+    while _apply_day and now - _apply_day[0] > 86_400:
+        _apply_day.popleft()
+    if len(_apply_day) >= config.PUBLIC_APPLY_PER_DAY:
+        raise HTTPException(status_code=429, detail="Auto-Fill has reached today's limit on the public demo. Open the clinic's form and fill it in yourself.")
+    q = _apply_hits.setdefault(client_ip(request), deque())
+    while q and now - q[0] > 3600:
+        q.popleft()
+    if len(q) >= config.PUBLIC_APPLY_PER_HOUR:
+        raise HTTPException(status_code=429, detail="You've used Auto-Fill a few times in the last hour. Try again later, or open the clinic's form and fill it in yourself.")
+    q.append(now)
+    _apply_day.append(now)
+    if len(_apply_hits) > 10_000:
+        for ip in [ip for ip, h in _apply_hits.items() if not h or now - h[-1] > 3600]:
+            del _apply_hits[ip]
 
 
 def public_guard(request: Request):
     if not config.public_restricted(request) or request.method == "OPTIONS":
         return
     path = request.url.path
+    if path in APPLY_PATHS and config.PUBLIC_APPLY:
+        apply_quota(request)  # allowed for visitors, within limits (and only for known clinic forms: apply_form.py)
+        return
     if path in LIVE_ONLY_PATHS:
         raise HTTPException(
             status_code=403,
@@ -95,17 +136,18 @@ def public_guard(request: Request):
             raise HTTPException(status_code=429, detail="Too many requests from this device. Try again in a few minutes.")
         q.append(now)
         if len(_hits) > 10_000:  # don't let the table grow forever
-            _hits.clear()
+            _trim_hits(now)
 
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    if config.SEED_ON_START:
-        try:
-            added = clinic_db.seed_if_empty(config.SEED_PATH, config.CACHE_PATH, config.DEFAULT_CLINIC_URLS)
-            print(f"[startup] clinic database: {clinic_db.count()} clinics" + (f" ({added} loaded from seed files)" if added else ""))
-        except Exception as e:  # a broken seed file must never stop the API
-            print(f"[startup] clinic database seeding failed: {type(e).__name__}: {e}")
+    # Nothing is preloaded: the clinic database only fills from real searches (TinyFish finds a city's clinics the
+    # first time someone searches it).
+    try:
+        have = clinic_db.count() if Path(clinic_db.DB_PATH).exists() else 0  # don't create the file just to count it
+        print(f"[startup] clinic database: {have} clinics" + ("" if have else " (fills up as people search)"))
+    except Exception as e:
+        print(f"[startup] clinic database not readable yet: {type(e).__name__}: {e}")
     tasks = []
     if config.WATCHDOG_INTERVAL_MIN > 0:
         tasks.append(asyncio.create_task(watch_api.watchdog_loop()))
@@ -130,7 +172,7 @@ app.add_middleware(CatchAllMiddleware)  # added first = inner, so CORS headers s
 app.add_middleware(
     CORSMiddleware,
     # Only local frontends (any port on localhost / 127.0.0.1), anything listed in ALLOWED_ORIGINS, and anything
-    # matching ALLOWED_ORIGIN_REGEX (e.g. Vercel preview URLs). A random website can't call the API.
+    # matching ALLOWED_ORIGIN_REGEX (e.g. Cloudflare preview builds). A random website can't call the API.
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?" + (f"|{config.ALLOWED_ORIGIN_REGEX}" if config.ALLOWED_ORIGIN_REGEX else ""),
     allow_origins=config.EXTRA_ORIGINS,
     allow_credentials=False,
@@ -142,8 +184,9 @@ app.add_middleware(
 @app.get("/health")
 def health(request: Request):
     # public_demo tells the website to show saved results only (live agents unlock with the admin key)
-    # email_alerts tells the apps whether opening alerts also go out by email
-    return {"status": "ok", "public_demo": config.public_restricted(request), "email_alerts": config.email_alerts_enabled()}
+    public = config.public_restricted(request)
+    # apply: whether Auto-Fill is available to this visitor (on the public demo too, within limits)
+    return {"status": "ok", "public_demo": public, "apply": (not public) or config.PUBLIC_APPLY}
 
 
 app.include_router(scanning.router)
@@ -154,3 +197,4 @@ app.include_router(cpso.router)
 app.include_router(orchestrator.router)
 app.include_router(watch_api.router)
 app.include_router(clinics_api.router)
+app.include_router(feedback.router)

@@ -8,15 +8,17 @@ A status change triggers Watchdog alerts for everyone watching that clinic.
 """
 import asyncio
 import hashlib
+import ipaddress
 import json
 import re
+import socket
 import time
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from . import config, common, llm, models, clinic_db, scanning, watchdog
+from . import config, common, agents, llm, models, clinic_db, scanning, watchdog
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 CareScout/1.0"
 FETCH_TIMEOUT_S = 15
@@ -165,11 +167,36 @@ def _per_loop(name: str, factory):
     return item[1]
 
 
+def _is_public_ip(ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip.split("%")[0]).is_global
+    except ValueError:
+        return False
+
+
+async def check_public_host(url: str) -> None:
+    """Refuse to fetch anything that isn't on the public internet (localhost, private networks, cloud metadata...).
+    Clinic URLs can come from users and web search, so the server must never be tricked into reading internal pages."""
+    parts = urlparse(url)
+    host = parts.hostname
+    if parts.scheme not in ("http", "https") or not host:
+        raise PageReadError("not a valid http(s) URL")
+    try:
+        infos = await asyncio.to_thread(socket.getaddrinfo, host, parts.port or (443 if parts.scheme == "https" else 80))
+    except OSError as e:
+        raise PageReadError(f"couldn't find the website ({host})") from e
+    if not infos or not all(_is_public_ip(info[4][0]) for info in infos):
+        raise PageReadError("that address isn't a public website")
+
+
 async def fetch_page(url: str) -> tuple[str, str]:
-    """(final url after redirects, html). Raises PageReadError."""
+    """(final url after redirects, html). Raises PageReadError. Every hop (redirects too) must be a public website."""
+    async def guard(request: httpx.Request):
+        await check_public_host(str(request.url))
+
     async with _per_loop("fetch", lambda: asyncio.Semaphore(config.FETCH_CONCURRENCY)):
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_S,
+            async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_S, event_hooks={"request": [guard]},
                                          headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}) as client:
                 resp = await client.get(url)
         except httpx.HTTPError as e:
@@ -210,7 +237,8 @@ def gemini_read(url: str, title: str, text: str, links: list[dict]) -> models.Pa
         "waitlist_url: the link from the list for the waitlist / new-patient / intake form, else null; "
         "address: the clinic's street address in Ontario exactly as written, else null; "
         "raw_notes: a short plain-text summary of what the page says about joining (what a patient needs such as a health card, "
-        "the phone number, hours to call or register, languages, OHIP / UHIP / uninsured, phone-only or online form); "
+        "the phone number, hours to call or register, the clinic's opening hours, any wait times or busiest times it mentions, "
+        "languages, OHIP / UHIP / uninsured, phone-only or online form); "
         "better_url: only when status is 'unknown', the one link from the list most likely to say whether they take new patients "
         "(e.g. 'New patients', 'Become a patient'), else null. Only use what the page says; never guess."
     )
@@ -269,58 +297,78 @@ def notify_watchers(row: dict, old_status: str | None) -> int:
     return made
 
 
-async def check_url(url: str, city: str, *, allow_agent: bool = True, force: bool = False, on_progress=None) -> dict:
+async def check_url(url: str, city: str, *, allow_agent: bool = True, force: bool = False, on_progress=None, agent_only: bool = False) -> dict:
     """Re-check one clinic and store the result. Never raises (except cancellation).
 
     Returns {"clinic": <clinic dict>, "method": "unchanged" | "page" | "agent" | "failed", "status_changed": bool,
     "error": str | None}. On failure the clinic's last good result is returned if there is one.
+    One check per clinic at a time: a second caller (search, background job, watchdog) waits for the first,
+    and then usually finds the page unchanged instead of paying for a second Gemini read or browser agent.
+    agent_only: skip the quick read and have a TinyFish browser agent read the site (watch mode, so people see it).
     """
-    async def progress(message: str):
+    locks = _per_loop("url_locks", dict)
+    lock = locks.setdefault(clinic_db.url_key(url), asyncio.Lock())
+    async with lock:
+        return await _check_url(url, city, allow_agent=allow_agent or agent_only, force=force, on_progress=on_progress, agent_only=agent_only)
+
+
+async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_progress, agent_only: bool = False) -> dict:
+    async def progress(message: str, live_url: str | None = None):
         if on_progress:
-            await on_progress(message)
+            await (on_progress(message, live_url=live_url) if live_url else on_progress(message))
 
     clinic_db.add_url(url, city)
     old = clinic_db.get(url) or {}
     reason = "not a valid http(s) URL"
     if common.is_http_url(url):
-        try:
-            await progress("Reading the clinic's website...")
-            page = await read_page(url)
-            digest = page_hash(page["text"])
-            if not force and old.get("status") and old.get("content_hash") == digest:
-                row = clinic_db.mark_unchanged(url)
-                return {"clinic": clinic_db.to_clinic(row), "method": "unchanged", "status_changed": False, "error": None}
-            ex = await extract(page)
-            base_url = page["final_url"]
-            if ex.status not in config.STATUSES and ex.better_url:
-                nxt = urljoin(base_url, ex.better_url)
-                if nxt in {l["url"] for l in page["links"]} and nxt != base_url:
-                    await progress("Following the clinic's new-patient link...")
-                    page2 = await read_page(nxt)
-                    ex2 = await extract(page2)
-                    if ex2.status in config.STATUSES:
-                        ex2.name = ex2.name or ex.name
-                        ex2.address = ex2.address or ex.address
-                        ex, base_url = ex2, page2["final_url"]
-                        digest = page_hash(page["text"] + page2["text"])
-            if ex.status not in config.STATUSES:
-                raise PageReadError("the website doesn't clearly say whether it's taking new patients")
-            row, old_status = clinic_db.save_check(url, city, _clinic_from(url, ex, base_url, old), digest, "page")
-            changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])
-            return {"clinic": clinic_db.to_clinic(row), "method": "page", "status_changed": changed, "error": None}
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            reason = str(e)[:200] or type(e).__name__
-            print(f"[refresh] quick read failed for {url}: {reason}")
+        if agent_only:
+            reason = "watch mode: a browser agent reads every clinic"
+        else:
+            try:
+                await progress("Reading the clinic's website...")
+                page = await read_page(url)
+                digest = page_hash(page["text"])
+                if not force and old.get("status") and old.get("content_hash") == digest:
+                    row = clinic_db.mark_unchanged(url)
+                    return {"clinic": clinic_db.to_clinic(row), "method": "unchanged", "status_changed": False, "error": None}
+                ex = await extract(page)
+                base_url = page["final_url"]
+                if ex.status not in config.STATUSES and ex.better_url:
+                    nxt = urljoin(base_url, ex.better_url)
+                    if nxt in {l["url"] for l in page["links"]} and nxt != base_url:
+                        await progress("Following the clinic's new-patient link...")
+                        page2 = await read_page(nxt)
+                        ex2 = await extract(page2)
+                        if ex2.status in config.STATUSES:
+                            ex2.name = ex2.name or ex.name
+                            ex2.address = ex2.address or ex.address
+                            ex, base_url = ex2, page2["final_url"]
+                            digest = page_hash(page["text"] + page2["text"])
+                if ex.status not in config.STATUSES:
+                    raise PageReadError("the website doesn't clearly say whether it's taking new patients")
+                row, old_status = clinic_db.save_check(url, city, _clinic_from(url, ex, base_url, old), digest, "page")
+                changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])
+                return {"clinic": clinic_db.to_clinic(row), "method": "page", "status_changed": changed, "error": None}
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                reason = str(e)[:200] or type(e).__name__
+                print(f"[refresh] quick read failed for {url}: {reason}")
 
         if allow_agent:
-            await progress("Quick read didn't work; waiting for a browser agent...")
+            await progress("Waiting for a TinyFish browser agent..." if agent_only else "Quick read didn't work; waiting for a browser agent...")
 
             async def started():
                 await progress("Agent started scanning...")
 
-            clinic = await scanning.scan_clinic(url, on_start=started)
+            async def agent_event(kind: str, value: str):
+                # the browser agent's live view and its steps, for people watching the search
+                if kind == "live":
+                    await progress("Browser agent is live: watch it read the clinic's website.", live_url=value)
+                elif kind == "step":
+                    await progress(f"Agent: {value}")
+
+            clinic = await scanning.scan_clinic(url, on_start=started, on_event=agent_event)
             if not common.is_failed(clinic):
                 row, old_status = clinic_db.save_check(url, city, clinic, None, "agent")
                 changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])
@@ -351,12 +399,14 @@ async def refresh_stale(limit: int | None = None, hours: float | None = None, al
     agent_ok = config.REFRESH_ALLOW_AGENT if allow_agent is None else allow_agent
 
     async def one(row):
-        result = await check_url(row["url"], row.get("city") or "London, ON", allow_agent=agent_ok)
+        # no browser agents while a patient's search is running: they need both slots
+        result = await check_url(row["url"], row.get("city") or "London, ON", allow_agent=agent_ok and not agents.searches_running())
         if result["method"] in ("page", "agent"):
             await locate_and_store(result["clinic"], row.get("city") or "London, ON")
         return result
 
-    results = await asyncio.gather(*(one(r) for r in rows))
+    # One clinic at a time: a background batch must never fill the Gemini queue ahead of a patient's search.
+    results = [await one(r) for r in rows]
     tally = {"checked": len(rows), "unchanged": 0, "page": 0, "agent": 0, "failed": 0, "status_changes": 0}
     for r in results:
         tally[r["method"]] += 1
@@ -369,6 +419,8 @@ async def refresher_loop():
     """Background job: keep the clinic database fresh (REFRESH_INTERVAL_MIN)."""
     print(f"[refresh] background re-check every {config.REFRESH_INTERVAL_MIN:g} min, {config.REFRESH_BATCH} clinics per run")
     while True:
+        # wait first: a restart right before a demo must not start a big batch that competes with it
+        await asyncio.sleep(config.REFRESH_INTERVAL_MIN * 60)
         try:
             tally = await refresh_stale()
             print(f"[refresh] {tally}")
@@ -376,4 +428,3 @@ async def refresher_loop():
             raise
         except Exception as e:  # never let the loop die
             print(f"[refresh] run failed: {type(e).__name__}: {e}")
-        await asyncio.sleep(config.REFRESH_INTERVAL_MIN * 60)

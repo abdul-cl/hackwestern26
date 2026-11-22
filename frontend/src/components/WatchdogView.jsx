@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Bell, ExternalLink, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { useAppState } from "../state/AppState";
@@ -13,7 +14,7 @@ function ago(iso) {
   return h < 24 ? `checked ${h} h ago` : `checked ${Math.round(h / 24)} d ago`;
 }
 
-/** Monitored clinics (GET /api/watch), "Check All Now", alert history, and the demo "Simulate Opening". */
+/** Monitored clinics (GET /api/watch), "Check All Now", alert history, and "Preview an alert" (changes nothing). */
 export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
   const { publicDemo } = useAppState();
   const [watches, setWatches] = useState([]);
@@ -24,6 +25,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const userEmail = email.includes("@") ? email.trim() : undefined;
+  const [params, setParams] = useSearchParams();
+  const autoSimulated = useRef(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -73,6 +76,16 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
     }
   };
 
+  // Arrived from "See what the alert looks like" at the end of a search: play the opening alert for that watch.
+  useEffect(() => {
+    const id = Number(params.get("simulate"));
+    if (!id || autoSimulated.current || loading) return;
+    autoSimulated.current = true;
+    setParams({}, { replace: true });
+    if (watches.some((w) => w.id === id)) simulate(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, loading, watches]);
+
   const remove = async (w) => {
     if (!userEmail) {
       setError("Enter your email above to manage your watches.");
@@ -101,7 +114,7 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
           </div>
         </div>
         {!userEmail && <p className="mt-2 text-xs text-amber-700">Showing everyone's watches with emails hidden. Enter your email to see only yours.</p>}
-        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Simulate Opening to see how an alert looks.</p>}
+        {publicDemo && <p className="mt-2 text-xs text-slate-500">Live re-checks are turned off on this public demo. Use Preview an alert to see what an opening alert looks like.</p>}
         {checking && <p className="mt-2 text-xs text-slate-500">Agents are re-checking each clinic's website. This takes a few minutes.</p>}
         {message && <p className="mt-2 text-sm text-emerald-700">{message}</p>}
         {error && <p className="mt-2 text-sm text-rose-700">{error}</p>}
@@ -115,8 +128,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
             No watched clinics yet. Use <b>Watch Clinic</b> on any full clinic, or add your email before launching a search to auto-watch them.
           </div>
         ) : (
-          watches.map((w) => (
-            <div key={w.id} className="flex flex-wrap items-center gap-3 p-4">
+          watches.map((w, i) => (
+            <div key={w.id} style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }} className="flex animate-row-in flex-wrap items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-slate-900">{w.clinic_name}</span>
@@ -130,8 +143,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
                   {!userEmail && <span>{w.user_email}</span>}
                 </div>
               </div>
-              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Demo only">
-                <Sparkles className="h-3.5 w-3.5" /> Simulate
+              <button onClick={() => simulate(w.id)} disabled={simulating} className="btn-ghost py-1 text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert; changes nothing">
+                <Sparkles className="h-3.5 w-3.5" /> Preview alert
               </button>
               {userEmail && (
                 <button onClick={() => remove(w)} className="btn-ghost px-2 py-1 text-slate-400 hover:text-rose-600" aria-label={`Stop watching ${w.clinic_name}`}>
@@ -148,7 +161,7 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Bell className="h-4 w-4" /> Recent alerts</h3>
           <ul className="mt-2 space-y-2 text-sm">
             {alerts.map((a) => (
-              <li key={a.alert_id} className="flex items-start gap-2">
+              <li key={a.alert_id} className="flex animate-row-in items-start gap-2">
                 <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                 <span className="text-slate-700">{a.message}</span>
                 {a.simulated && <span className="badge bg-slate-100 text-slate-500 ring-slate-200">demo</span>}
@@ -160,8 +173,8 @@ export default function WatchdogView({ email, onEmail, onAlert, onChanged }) {
       )}
 
       <div className="flex justify-end">
-        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-ghost text-xs text-slate-400 hover:text-emerald-700" title="For live demos: pretends the newest watched clinic just opened">
-          {simulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Simulate Opening (Demo)
+        <button onClick={() => simulate(undefined)} disabled={simulating || watches.length === 0} className="btn-ghost text-xs text-slate-400 hover:text-emerald-700" title="Shows an example alert for the newest watched clinic; changes nothing">
+          {simulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Preview an alert
         </button>
       </div>
     </div>

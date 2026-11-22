@@ -6,6 +6,7 @@ sys.path.insert(0, BACKEND)
 import os as _os, tempfile as _tempfile
 _os.environ.setdefault("DATA_DIR", _tempfile.mkdtemp())  # never touch the real clinics.db
 _os.environ.setdefault("CARESCOUT_SEED", "0")  # tests start with an empty clinic database
+_os.environ.setdefault("DEMO_REPLAY", "0")  # never replay the real demo recording in tests
 import app.main as m
 from app import config, common, models, cache, agents, geo, watchdog, scanning, discovery, ranking, apply_form, cpso, orchestrator, watch_api
 import app.watchdog as wd
@@ -102,10 +103,10 @@ newest = c.get("/api/watch").json()["watched_clinics"][0]
 r = c.post("/api/watch/simulate-opening")  # no body
 al = r.json().get("alert", {})
 check("simulate default = newest watch", r.status_code == 200 and al["id"] == newest["id"] and al["new_status"] == "accepting"
-      and al["simulated"] is True and "***" in al["user_email"] and "Good news" in al["message"], r.text)
-check("simulate wrote accepting to SQLite", c.get("/api/watch").json()["watched_clinics"][0]["last_status"] == "accepting")
+      and al["simulated"] is True and "***" in al["user_email"] and al["message"].startswith("Example alert") and al["evidence_quote"] == "", r.text)
+check("simulate is only a preview: the watch keeps its real status", c.get("/api/watch").json()["watched_clinics"][0]["last_status"] == newest["last_status"])
 r = c.post("/api/watch/simulate-opening", json={})
-check("simulate {} works + repeatable (old_status closed)", r.status_code == 200 and r.json()["alert"]["old_status"] == "closed", r.text)
+check("simulate {} works + repeatable (old_status is the real status)", r.status_code == 200 and r.json()["alert"]["old_status"] == newest["last_status"], r.text)
 r = c.post("/api/watch/simulate-opening", json={"watch_id": w2["id"]})
 check("simulate by watch_id", r.json()["alert"]["clinic_name"] == "Beta" and r.json()["alert"]["old_status"] == "waitlist", r.text)
 r = c.post("/api/watch/simulate-opening", json={"watch_id": 9999})
@@ -140,7 +141,7 @@ check("no alerts yet", c.get("/api/watch/alerts").json() == {"alerts": []})
 c.post("/api/watch/check")  # alpha -> accepting, beta -> waitlist
 c.post("/api/watch/simulate-opening", json={"watch_id": 1})
 hist = c.get("/api/watch/alerts").json()["alerts"]
-check("history: 2 real + 1 simulated, newest first", len(hist) == 3 and hist[0]["simulated"] is True and not hist[1]["simulated"]
+check("history: real alerts only (a preview is never added), newest first", len(hist) == 2 and not any(a["simulated"] for a in hist)
       and hist[0]["alert_id"] > hist[1]["alert_id"], str(hist))
 check("history item shape", set(hist[0]) == {"alert_id", "id", "clinic_name", "url", "user_email", "old_status", "new_status",
                                              "evidence_quote", "message", "simulated", "created_at"} and ISO.match(hist[0]["created_at"]), str(hist[0]))
@@ -154,7 +155,7 @@ check("delete someone else's watch -> 404", r.status_code == 404 and len(wd.list
 check("delete without user_email -> 422", c.delete("/api/watch/1").status_code == 422)
 r = c.delete("/api/watch/1", params={"user_email": "alice@gmail.com"})
 check("owner deletes watch", r.json() == {"deleted": True, "id": 1} and wd.list_watches("alice@gmail.com") == [], r.text)
-check("alert history kept after unwatch", len(c.get("/api/watch/alerts", params={"user_email": "alice@gmail.com"}).json()["alerts"]) == 2)
+check("alert history kept after unwatch", len(c.get("/api/watch/alerts", params={"user_email": "alice@gmail.com"}).json()["alerts"]) == 1)  # her one real alert (the preview was never stored)
 r = c.options("/api/watch/2", headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "DELETE"})
 check("CORS allows DELETE", r.status_code == 200 and "DELETE" in r.headers.get("access-control-allow-methods", ""), str(r.headers))
 
