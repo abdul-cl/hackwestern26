@@ -55,6 +55,10 @@ PUBLIC_APPLY_PER_DAY = max(0, int(os.getenv("PUBLIC_APPLY_PER_DAY", "40")))
 # quick page reads, TinyFish browser agents when a site needs one) and saves the results for everyone after. Limited to
 # PUBLIC_NEW_CITY_MAX clinics per search and PUBLIC_NEW_CITIES_PER_DAY such searches a day (429 after that).
 PUBLIC_NEW_CITY_MAX = max(1, int(os.getenv("PUBLIC_NEW_CITY_MAX", "8")))
+# Watch mode ("Watch TinyFish check each clinic"): every clinic is read by a browser agent, live. On the public demo each
+# such search covers at most PUBLIC_WATCH_MAX clinics, and the site allows PUBLIC_WATCH_PER_DAY of them a day.
+PUBLIC_WATCH_MAX = max(1, int(os.getenv("PUBLIC_WATCH_MAX", "4")))
+PUBLIC_WATCH_PER_DAY = max(0, int(os.getenv("PUBLIC_WATCH_PER_DAY", "10")))
 # A search that finds fewer saved clinics than asked for has TinyFish look for more. In saved-results mode (demo, public
 # demo) that web search runs at most once per city per WEB_SEARCH_COOLDOWN_H hours, so a small city isn't searched again
 # on every visit.

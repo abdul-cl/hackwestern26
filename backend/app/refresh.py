@@ -297,21 +297,22 @@ def notify_watchers(row: dict, old_status: str | None) -> int:
     return made
 
 
-async def check_url(url: str, city: str, *, allow_agent: bool = True, force: bool = False, on_progress=None) -> dict:
+async def check_url(url: str, city: str, *, allow_agent: bool = True, force: bool = False, on_progress=None, agent_only: bool = False) -> dict:
     """Re-check one clinic and store the result. Never raises (except cancellation).
 
     Returns {"clinic": <clinic dict>, "method": "unchanged" | "page" | "agent" | "failed", "status_changed": bool,
     "error": str | None}. On failure the clinic's last good result is returned if there is one.
     One check per clinic at a time: a second caller (search, background job, watchdog) waits for the first,
     and then usually finds the page unchanged instead of paying for a second Gemini read or browser agent.
+    agent_only: skip the quick read and have a TinyFish browser agent read the site (watch mode, so people see it).
     """
     locks = _per_loop("url_locks", dict)
     lock = locks.setdefault(clinic_db.url_key(url), asyncio.Lock())
     async with lock:
-        return await _check_url(url, city, allow_agent=allow_agent, force=force, on_progress=on_progress)
+        return await _check_url(url, city, allow_agent=allow_agent or agent_only, force=force, on_progress=on_progress, agent_only=agent_only)
 
 
-async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_progress) -> dict:
+async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_progress, agent_only: bool = False) -> dict:
     async def progress(message: str, live_url: str | None = None):
         if on_progress:
             await (on_progress(message, live_url=live_url) if live_url else on_progress(message))
@@ -320,39 +321,42 @@ async def _check_url(url: str, city: str, *, allow_agent: bool, force: bool, on_
     old = clinic_db.get(url) or {}
     reason = "not a valid http(s) URL"
     if common.is_http_url(url):
-        try:
-            await progress("Reading the clinic's website...")
-            page = await read_page(url)
-            digest = page_hash(page["text"])
-            if not force and old.get("status") and old.get("content_hash") == digest:
-                row = clinic_db.mark_unchanged(url)
-                return {"clinic": clinic_db.to_clinic(row), "method": "unchanged", "status_changed": False, "error": None}
-            ex = await extract(page)
-            base_url = page["final_url"]
-            if ex.status not in config.STATUSES and ex.better_url:
-                nxt = urljoin(base_url, ex.better_url)
-                if nxt in {l["url"] for l in page["links"]} and nxt != base_url:
-                    await progress("Following the clinic's new-patient link...")
-                    page2 = await read_page(nxt)
-                    ex2 = await extract(page2)
-                    if ex2.status in config.STATUSES:
-                        ex2.name = ex2.name or ex.name
-                        ex2.address = ex2.address or ex.address
-                        ex, base_url = ex2, page2["final_url"]
-                        digest = page_hash(page["text"] + page2["text"])
-            if ex.status not in config.STATUSES:
-                raise PageReadError("the website doesn't clearly say whether it's taking new patients")
-            row, old_status = clinic_db.save_check(url, city, _clinic_from(url, ex, base_url, old), digest, "page")
-            changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])
-            return {"clinic": clinic_db.to_clinic(row), "method": "page", "status_changed": changed, "error": None}
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            reason = str(e)[:200] or type(e).__name__
-            print(f"[refresh] quick read failed for {url}: {reason}")
+        if agent_only:
+            reason = "watch mode: a browser agent reads every clinic"
+        else:
+            try:
+                await progress("Reading the clinic's website...")
+                page = await read_page(url)
+                digest = page_hash(page["text"])
+                if not force and old.get("status") and old.get("content_hash") == digest:
+                    row = clinic_db.mark_unchanged(url)
+                    return {"clinic": clinic_db.to_clinic(row), "method": "unchanged", "status_changed": False, "error": None}
+                ex = await extract(page)
+                base_url = page["final_url"]
+                if ex.status not in config.STATUSES and ex.better_url:
+                    nxt = urljoin(base_url, ex.better_url)
+                    if nxt in {l["url"] for l in page["links"]} and nxt != base_url:
+                        await progress("Following the clinic's new-patient link...")
+                        page2 = await read_page(nxt)
+                        ex2 = await extract(page2)
+                        if ex2.status in config.STATUSES:
+                            ex2.name = ex2.name or ex.name
+                            ex2.address = ex2.address or ex.address
+                            ex, base_url = ex2, page2["final_url"]
+                            digest = page_hash(page["text"] + page2["text"])
+                if ex.status not in config.STATUSES:
+                    raise PageReadError("the website doesn't clearly say whether it's taking new patients")
+                row, old_status = clinic_db.save_check(url, city, _clinic_from(url, ex, base_url, old), digest, "page")
+                changed = notify_watchers(row, old_status) > 0 or (old_status is not None and old_status != row["status"])
+                return {"clinic": clinic_db.to_clinic(row), "method": "page", "status_changed": changed, "error": None}
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                reason = str(e)[:200] or type(e).__name__
+                print(f"[refresh] quick read failed for {url}: {reason}")
 
         if allow_agent:
-            await progress("Quick read didn't work; waiting for a browser agent...")
+            await progress("Waiting for a TinyFish browser agent..." if agent_only else "Quick read didn't work; waiting for a browser agent...")
 
             async def started():
                 await progress("Agent started scanning...")

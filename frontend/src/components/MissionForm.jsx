@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
-import { Clock, Info, Loader2, MapPin, Rocket, Square } from "lucide-react";
+import { Clock, Eye, Info, Loader2, MapPin, Rocket, Square } from "lucide-react";
 import { api } from "../api";
 import { COVERAGE_LABELS, COVERAGE_OPTIONS, LANGUAGE_OPTIONS, MAX_CLINICS } from "../config";
+
+/** "Watch TinyFish check each clinic": every clinic is read by a TinyFish browser agent, live in the activity feed. */
+function WatchToggle({ values, set }) {
+  return (
+    <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600">
+      <input type="checkbox" className="h-4 w-4 rounded accent-emerald-600" checked={!!values.watchAgents} onChange={set("watchAgents")} />
+      <Eye className="h-4 w-4 text-pine-600" aria-hidden="true" />
+      Watch TinyFish check each clinic
+      <span className="text-xs text-slate-400">live browser view, about a minute per clinic, 2 at a time</span>
+    </label>
+  );
+}
 
 /** The mission search bar. Controlled by the page (values / onChange) so other views can reuse the same email/postal code. */
 export default function MissionForm({ values, onChange, onLaunch, onStop, running, publicDemo = false }) {
@@ -107,10 +119,13 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {publicDemo ? (
-          <p className="flex items-start gap-2 text-sm text-slate-600">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-pine-600" />
-            <span>This public demo shows saved results from the CareScout database. Live checks run when CareScout is set up locally.</span>
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="flex items-start gap-2 text-sm text-slate-600">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-pine-600" />
+              <span>Cities CareScout has searched before load from saved results. A city it hasn't searched yet is searched live by TinyFish.</span>
+            </p>
+            <WatchToggle values={values} set={set} />
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600">
@@ -124,6 +139,7 @@ export default function MissionForm({ values, onChange, onLaunch, onStop, runnin
               Re-check every clinic
               <span className={`text-xs ${values.useCache ? "text-slate-300" : "text-slate-400"}`}>slower, ignores saved results</span>
             </label>
+            <WatchToggle values={values} set={set} />
           </div>
         )}
         {running ? (

@@ -67,6 +67,7 @@ export function AppStateProvider({ children }) {
         use_cache: s.useCache || publicDemo,
         max_clinics: Math.max(1, Math.min(MAX_CLINICS, Number(s.maxClinics) || 5)),
         refresh: s.recheckAll ? "all" : "auto",
+        watch_agents: !!s.watchAgents,
       });
     },
     [search, mission, publicDemo],

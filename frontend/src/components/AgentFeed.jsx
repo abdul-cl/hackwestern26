@@ -94,15 +94,20 @@ export default function AgentFeed({ state, onStop, onReset }) {
       )}
 
       {/* a browser agent took over a clinic: watch its screen while it works */}
-      {state.live && (
-        <LiveAgentView
-          key={state.live.liveUrl}
-          className="mt-3"
-          liveUrl={state.live.liveUrl}
-          title={`TinyFish browser agent on ${state.live.clinicUrl.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}`}
-          steps={state.live.steps}
-          done={state.live.done || !running}
-        />
+      {/* browser agents working right now (up to 2 at once), side by side on wide screens */}
+      {running && Object.values(state.lives).some((l) => !l.done) && (
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {Object.entries(state.lives)
+            .filter(([, l]) => !l.done)
+            .map(([clinicUrl, l]) => (
+              <LiveAgentView
+                key={l.liveUrl}
+                liveUrl={l.liveUrl}
+                title={`TinyFish browser agent on ${clinicUrl.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}`}
+                steps={l.steps}
+              />
+            ))}
+        </div>
       )}
 
       {error && (

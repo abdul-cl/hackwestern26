@@ -90,6 +90,16 @@ async def replay_events(replay: dict, city: str, user_task, limit: int, clinics:
 
 
 _new_city_searches: list[float] = []  # when public new-city searches ran (for PUBLIC_NEW_CITIES_PER_DAY)
+_watch_searches: list[float] = []  # when public watch-mode searches ran (for PUBLIC_WATCH_PER_DAY)
+
+
+def watch_allowed() -> bool:
+    now = time.monotonic()
+    _watch_searches[:] = [t for t in _watch_searches if now - t < 86_400]
+    if len(_watch_searches) >= config.PUBLIC_WATCH_PER_DAY:
+        return False
+    _watch_searches.append(now)
+    return True
 
 
 def new_city_allowed() -> bool:
@@ -135,10 +145,16 @@ async def mission_stream(req: models.MissionRequest, request: Request):
     limit = max(1, min(req.max_clinics, config.MAX_MISSION_CLINICS))
     refresh_mode = req.refresh if req.refresh in ("auto", "all", "none") else "auto"
     public = config.public_restricted(request)
-    saved_only = req.use_cache or public or refresh_mode == "none"
+    # Watch mode: a TinyFish browser agent reads every clinic in this search (saved ones too), live on screen.
+    watch = bool(req.watch_agents)
+    if watch and public:
+        if not watch_allowed():
+            raise HTTPException(status_code=429, detail="Watch mode has reached today's limit on the public demo. Run a normal search, or try again tomorrow.")
+        limit = min(limit, config.PUBLIC_WATCH_MAX)
+    saved_only = (req.use_cache or public or refresh_mode == "none") and not watch
 
     # Demo searches replay a recording of a real live search when there is one (so the agents' work is visible).
-    replay = load_replay(city) if saved_only and refresh_mode != "none" and not (req.clinic_urls and not public) else None
+    replay = load_replay(city) if saved_only and refresh_mode != "none" and not (req.clinic_urls and not public) and not watch else None
     # Saved-only searches (demo mode, public demo) use the clinic database. A city with nothing saved yet is searched
     # live instead: TinyFish finds its clinics and checks them (browser agents when a site needs one), and the results
     # are saved for the next search. The saved London backup (fallback_cache.json) is only ever used for London.
@@ -180,6 +196,9 @@ async def mission_stream(req: models.MissionRequest, request: Request):
             else:
                 # ---- Stage 1: Scout (database first, web search only for more) ----
                 yield common.sse({"type": "stage", "stage": "discover", "message": f"Scout Agent looking for clinics in {city}..."})
+                if watch:
+                    yield common.sse({"type": "stage", "stage": "discover", "message":
+                                      "Watch mode: a TinyFish browser agent will open each clinic's website (2 at a time) and you can watch it work."})
                 if new_city:
                     yield common.sse({"type": "stage", "stage": "discover", "message":
                                       f"CareScout hasn't searched {city} before: TinyFish is searching the web for its clinics and will check each one live (this first search takes a minute or two; the results are saved for next time)."})
@@ -242,7 +261,7 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                     fresh = [u for u in urls if (rows_by_url[u] or {}).get("status")]
                     stale = [u for u in urls if u not in fresh]
                 else:
-                    fresh = [u for u in urls if refresh_mode == "auto" and clinic_db.is_fresh(rows_by_url[u], config.FRESH_HOURS)]
+                    fresh = [u for u in urls if refresh_mode == "auto" and not watch and clinic_db.is_fresh(rows_by_url[u], config.FRESH_HOURS)]
                     stale = [u for u in urls if u not in fresh]
                 if fallback or (saved_only and not stale):
                     msg = f"Showing {len(urls)} saved clinics."
@@ -280,7 +299,8 @@ async def mission_stream(req: models.MissionRequest, request: Request):
                             await queue.put(event)
 
                         try:
-                            result = await refresh.check_url(url, city, allow_agent=True, force=refresh_mode == "all", on_progress=progress)
+                            result = await refresh.check_url(url, city, allow_agent=True, force=refresh_mode == "all" or watch,
+                                                             on_progress=progress, agent_only=watch)
                             clinic = result["clinic"]
                         except Exception as e:
                             clinic = common.failed_clinic(url, f"scan error: {e}")

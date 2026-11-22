@@ -266,5 +266,38 @@ check("locate: partial code -> nothing", client.get("/api/locate", params={"post
 geo.geocode_postal_code = no_geo
 
 
+# ---- watch mode: every clinic is read by a TinyFish browser agent, live (saved ones too)
+from app import orchestrator, refresh as _refresh
+read_calls = []
+async def readable(url):
+    read_calls.append(url)
+    return {"final_url": url, "text": "We are accepting new patients. " * 20, "links": [], "title": "C"}
+_refresh.read_page = readable
+use_agent(SCAN_OK)
+config.PUBLIC_DEMO = False
+r = client.post("/api/mission/stream", json={"clinic_urls": ["https://w1.ca", "https://w2.ca"], "watch_agents": True})
+ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
+lives = {e["url"] for e in ev if e["type"] == "agent_status" and e.get("live_url")}
+check("watch mode: says so in the feed", any("Watch mode" in e.get("message", "") for e in ev))
+check("watch mode: no quick reads, a live browser agent for every clinic", read_calls == [] and lives == {"https://w1.ca", "https://w2.ca"}, f"{read_calls} {lives}")
+check("watch mode: results saved as agent checks", (clinic_db.get("https://w1.ca") or {}).get("checked_via") == "agent")
+read_calls.clear()
+r = client.post("/api/mission/stream", json={"clinic_urls": ["https://w1.ca"], "use_cache": True, "watch_agents": True})
+ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
+check("watch mode beats demo mode: a just-saved clinic is still read live by an agent",
+      any(e["type"] == "agent_status" and e.get("live_url") for e in ev) and read_calls == [], str(ev)[:300])
+config.PUBLIC_DEMO, config.PUBLIC_WATCH_PER_DAY, config.PUBLIC_WATCH_MAX = True, 1, 1
+orchestrator._watch_searches.clear()
+m._hits.clear()
+r = client.post("/api/mission/stream", json={"city": "London, ON", "watch_agents": True, "max_clinics": 5})
+ev = [json.loads(l[6:]) for l in r.text.split("\n\n") if l.startswith("data: ")]
+check("public: watch mode works, capped at PUBLIC_WATCH_MAX clinics", r.status_code == 200 and sum(e["type"] == "clinic_scanned" for e in ev) <= 1
+      and any("Watch mode" in e.get("message", "") for e in ev), str(ev)[:300])
+r = client.post("/api/mission/stream", json={"city": "London, ON", "watch_agents": True})
+check("public: watch mode daily limit (429)", r.status_code == 429 and "Watch mode" in r.json()["detail"], r.text)
+config.PUBLIC_DEMO, config.PUBLIC_WATCH_PER_DAY, config.PUBLIC_WATCH_MAX = False, 10, 4
+m._hits.clear()
+
+
 print("\nALL PASSED" if not fails else "\nFAILED: " + str(fails))
 sys.exit(1 if fails else 0)

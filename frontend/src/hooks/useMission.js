@@ -26,7 +26,7 @@ const initial = {
   rankError: null, // ranking failed (Gemini busy): results are shown unranked with a "Retry ranking" button
   rankRetrying: false,
   replay: null, // { recorded_at, speed } when this demo search replays a recorded real search
-  live: null, // { clinicUrl, liveUrl, steps: [], done } the browser agent being watched right now (live searches only)
+  lives: {}, // { [clinicUrl]: { liveUrl, steps: [], done } } browser agents' live views (live searches only; up to 2 at once)
 };
 
 let logId = 0;
@@ -111,22 +111,22 @@ function applyEvent(state, e) {
     case "agent_status": {
       // "Up to date (checked 2 h ago)" -> done; "Reading...", "Agent started...", "Following...", "Agent: ..." -> scanning
       const status = /^up to date/i.test(e.message) ? "done" : /reading|started|following|^agent|live/i.test(e.message) ? "scanning" : "queued";
-      let { live, log } = state;
+      let { lives, log } = state;
       // A browser agent took over this clinic: show its live view (never for a replay: those links have expired).
       if (e.live_url && !state.replay) {
-        live = { clinicUrl: e.url, liveUrl: e.live_url, steps: [], done: false };
+        lives = { ...lives, [e.url]: { liveUrl: e.live_url, steps: [], done: false } };
         log = [...log, entry("stage", `Browser agent is live on ${hostOf(e.url)}.`, "scan")];
       }
       if (/^Agent: /.test(e.message)) {
         const step = e.message.slice(7);
         log = [...log, entry("info", `${hostOf(e.url)}: ${step}`, "scan")];
-        if (live && live.clinicUrl === e.url) live = { ...live, steps: [...live.steps, step] };
+        if (lives[e.url]) lives = { ...lives, [e.url]: { ...lives[e.url], steps: [...lives[e.url].steps, step] } };
       }
-      return { ...state, live, log, agents: { ...state.agents, [e.url]: status } };
+      return { ...state, lives, log, agents: { ...state.agents, [e.url]: status } };
     }
     case "clinic_scanned": {
       const c = e.clinic;
-      if (state.live && state.live.clinicUrl === c.url) state = { ...state, live: { ...state.live, done: true } };
+      if (state.lives[c.url]) state = { ...state, lives: { ...state.lives, [c.url]: { ...state.lives[c.url], done: true } } };
       const urls = state.urls.includes(c.url) ? state.urls : [...state.urls, c.url];
       const text = isFailedScan(c) ? `Couldn't check ${c.url.replace(/^https?:\/\//, "")}` : `${c.name}: ${c.status}`;
       return {
